@@ -86,3 +86,18 @@ def test_api_upload_unsupported_format():
     assert response.status_code == 400
     assert "Invalid file format" in response.json()["detail"]
 
+
+def test_api_plan_deterministic():
+    file_path = FIXTURES_DIR / "sample_campaigns.csv"
+    with open(file_path, "rb") as f:
+        response = client.post(
+            "/api/v1/dataset/plan",
+            files={"file": ("sample_campaigns.csv", f, "text/csv")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert "pages" in data
+    assert len(data["pages"]) == 3
+    assert data["validation"]["is_valid"] is True
+
+

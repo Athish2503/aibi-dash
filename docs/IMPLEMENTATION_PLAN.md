@@ -20,12 +20,13 @@ Exit: validated dashboard-plan JSON.
 Tool registry, orchestrator, LLM adapter, NL query, insights, recommendations.
 Exit: agent calls tools and grounds answers.
 
-## Phase 5 — Power BI-ready generation
+## Phase 5 — Power BI-ready generation [COMPLETED]
 Semantic model, measures, report-definition builder, template strategy, structural validation.
-Exit: report artifacts validate.
+Exit: report artifacts validate (TMSL/BIM model.bim, PBISM, PBIR definition, 12-column layout report.json, and standalone .zip bundle).
 
-## Phase 6 — Desktop validation
+## Phase 6 — Desktop validation [COMPLETED]
 Verify generated report artifacts in the available local Power BI environment.
+Exit: local Power BI Desktop detection, registry/path inspection, structural artifact validation, launch runner, and verification diagnostics.
 
 ## Phase 7 — Power BI Service
 Authentication, workspace adapter, publishing, refresh, status, report link.

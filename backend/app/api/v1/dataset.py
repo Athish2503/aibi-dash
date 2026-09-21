@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Query
 import io
 import pandas as pd
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel
 
 from backend.app.config import settings
@@ -16,11 +16,15 @@ from backend.app.data.validator import validate_dataset
 from backend.app.data.cleaner import clean_dataset
 from backend.app.data.profiler import profile_dataset
 from backend.app.data.loader import load_dataset_into_df
+from backend.app.data.storage import save_dataset
+from backend.app.agent.plan_schemas import DashboardPlan
+from backend.app.agent.dashboard_planner import DashboardPlanner
 
 router = APIRouter()
 
 
 class DatasetPipelineResponse(BaseModel):
+    dataset_id: Optional[str] = None
     inspection: DatasetInspectionResult
     validation: DatasetValidationResult
     cleaning: DatasetCleaningResult
@@ -133,7 +137,11 @@ async def process_dataset_pipeline(file: UploadFile = File(...)):
         # 4. Profile
         profiling = profile_dataset(cleaned_df)
 
+        # 5. Register in storage
+        dataset_id = save_dataset(cleaned_df, filename=filename)
+
         return DatasetPipelineResponse(
+            dataset_id=dataset_id,
             inspection=inspection,
             validation=validation,
             cleaning=cleaning,
@@ -146,3 +154,55 @@ async def process_dataset_pipeline(file: UploadFile = File(...)):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Failed to process dataset pipeline: {str(e)}",
         )
+
+
+@router.post("/plan", response_model=DashboardPlan)
+async def generate_dashboard_plan_for_dataset(
+    file: UploadFile = File(...),
+    ai_assisted: bool = Query(default=False, description="Whether to customize the plan using Gemini AI"),
+    prompt: Optional[str] = Query(default=None, description="Optional analytical goals or customization instructions"),
+):
+    """
+    Generates a Power BI-ready typed DashboardPlan for an uploaded CSV/XLSX dataset.
+    Supports deterministic planning and AI-assisted customization with Gemini.
+    """
+    content, filename = await _read_and_validate_upload(file)
+    try:
+        raw_df, _ = load_dataset_into_df(content, file_name=filename)
+        validation = validate_dataset(raw_df, file_name=filename)
+        if not validation.is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "message": "Dataset failed schema validation prior to planning",
+                    "validation": validation.model_dump(),
+                },
+            )
+
+        cleaned_df, _ = clean_dataset(raw_df)
+        profiling = profile_dataset(cleaned_df)
+
+        planner = DashboardPlanner()
+        if ai_assisted:
+            plan = planner.plan_with_ai(
+                dataset_name=filename,
+                columns=list(cleaned_df.columns),
+                profile=profiling,
+                user_prompt=prompt,
+            )
+        else:
+            plan = planner.generate_deterministic_plan(
+                dataset_name=filename,
+                columns=list(cleaned_df.columns),
+                profile=profiling,
+            )
+
+        return plan
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Failed to generate dashboard plan: {str(e)}",
+        )
+
