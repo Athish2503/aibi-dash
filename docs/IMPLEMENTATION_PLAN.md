@@ -28,12 +28,13 @@ Exit: report artifacts validate (TMSL/BIM model.bim, PBISM, PBIR definition, 12-
 Verify generated report artifacts in the available local Power BI environment.
 Exit: local Power BI Desktop detection, registry/path inspection, structural artifact validation, launch runner, and verification diagnostics.
 
-## Phase 7 — Power BI Service
+## Phase 7 — Power BI Service [COMPLETED]
 Authentication, workspace adapter, publishing, refresh, status, report link.
-Exit: configured cloud end-to-end flow.
+Exit: configured cloud end-to-end flow (OAuth2 client credentials adapter, state transitions NOT_CONFIGURED -> AUTHENTICATED -> WORKSPACE_READY -> MODEL_CREATED -> REPORT_CREATED -> PUBLISHED -> REFRESHED, and sandbox mock mode).
 
-## Phase 8 — React
+## Phase 8 — React [COMPLETED]
 Upload, progress, plan review, result, chat.
+Exit: React + Vite responsive frontend application with Vanilla CSS design system, dataset intelligence profiler, plan reviewer with Gemini customization, PBIP result manager, and grounded AI analytics chat.
 
 ## Phase 9 — Testing
 Unit, integration, contract, end-to-end, failure-path.

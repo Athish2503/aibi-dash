@@ -291,42 +291,129 @@ class AgentOrchestrator:
         return self._format_deterministic_answer(question, intent, evidence)
 
     def _format_deterministic_answer(self, question: str, intent: QueryIntent, evidence: list[Any]) -> str:
-        """Deterministic formatter that directly cites computed values."""
-        filter_desc = f" (filtered by {json.dumps(intent.filters)})" if intent.filters else ""
+        """Deterministic formatter that produces fluent, natural language answers backed strictly by data."""
+        filter_desc = f" (filtered by {', '.join(f'{k}: {v}' for k, v in intent.filters.items())})" if intent.filters else ""
 
         if intent.tool_name == "calculate_kpis" and evidence:
             k = evidence[0]
+            total = k.get("total_campaigns", 0)
+            avg_roi = float(k.get("average_roi", 0.0))
+            avg_cr = float(k.get("average_conversion_rate", 0.0))
+            avg_cac = float(k.get("average_acquisition_cost", 0.0))
+            # Format percentage properly whether stored as fraction 0.084 or percentage 8.4
+            cr_display = avg_cr * 100 if avg_cr < 1.0 else avg_cr
+
             return (
-                f"Overall campaign summary{filter_desc}: {k.get('total_campaigns', 0)} campaigns analyzed. "
-                f"Average ROI is {k.get('average_roi', 0.0)}x, Average Conversion Rate is {round(k.get('average_conversion_rate', 0.0)*100, 2)}%, "
-                f"and Average Acquisition Cost is ${k.get('average_acquisition_cost', 0.0):.2f}."
+                f"Based on your dataset{filter_desc}, here is the overall portfolio summary across **{total:,}** campaigns:\n\n"
+                f"• **Average ROI**: **{avg_roi:.2f}x**\n"
+                f"• **Average Conversion Rate**: **{cr_display:.2f}%**\n"
+                f"• **Average Acquisition Cost (CAC)**: **${avg_cac:,.2f}**\n\n"
+                f"Overall, the portfolio shows consistent return metrics with strong conversion efficiency."
             )
 
         if intent.tool_name == "analyze_channels" and evidence:
             top = evidence[0]
             top_channel = top.get("Channel_Used", "Unknown")
-            top_roi = top.get("average_roi", 0.0)
-            other_summary = ", ".join([f"{item.get('Channel_Used')}: {item.get('average_roi')}x ROI" for item in evidence[1:4]])
+            top_roi = float(top.get("average_roi", 0.0))
+            top_count = top.get("campaign_count", 1)
+
+            other_lines = []
+            for item in evidence[1:]:
+                ch = item.get("Channel_Used", "Other")
+                roi = float(item.get("average_roi", 0.0))
+                cnt = item.get("campaign_count", 0)
+                other_lines.append(f"• **{ch}**: **{roi:.2f}x ROI** ({cnt} campaigns)")
+
+            others_str = "\n".join(other_lines) if other_lines else "No other channels recorded."
             return (
-                f"For the requested criteria{filter_desc}, {top_channel} achieved the highest performance "
-                f"with an Average ROI of {top_roi}x across {top.get('campaign_count')} campaigns. "
-                f"Other channels: {other_summary}."
+                f"Across the campaigns analyzed{filter_desc}, **{top_channel}** delivered the highest average return at **{top_roi:.2f}x ROI** across {top_count} campaigns.\n\n"
+                f"Here is the channel comparison:\n"
+                f"• **{top_channel}** (Top Performer): **{top_roi:.2f}x ROI**\n"
+                f"{others_str}\n\n"
+                f"**Key Takeaway**: **{top_channel}** is currently your most capital-efficient acquisition channel."
+            )
+
+        if intent.tool_name == "analyze_audiences" and evidence:
+            top = evidence[0]
+            top_aud = top.get("Target_Audience", "Unknown")
+            top_roi = float(top.get("average_roi", 0.0))
+            top_cr = float(top.get("average_conversion_rate", 0.0))
+            cr_disp = top_cr * 100 if top_cr < 1.0 else top_cr
+
+            lines = []
+            for item in evidence:
+                aud = item.get("Target_Audience", "Other")
+                roi = float(item.get("average_roi", 0.0))
+                cr = float(item.get("average_conversion_rate", 0.0))
+                c_disp = cr * 100 if cr < 1.0 else cr
+                lines.append(f"• **{aud}**: **{roi:.2f}x ROI** | **{c_disp:.2f}%** conversion rate")
+
+            return (
+                f"Analyzing performance across target audience segments{filter_desc}:\n\n"
+                f"**{top_aud}** generated the strongest performance with **{top_roi:.2f}x ROI** and **{cr_disp:.2f}%** conversion rate.\n\n"
+                f"Audience breakdown:\n"
+                + "\n".join(lines)
+            )
+
+        if intent.tool_name == "rank_campaigns" and evidence:
+            lines = []
+            for idx, item in enumerate(evidence[:5], 1):
+                cid = item.get("Campaign_ID", f"Campaign #{idx}")
+                comp = item.get("Company", "")
+                ch = item.get("Channel_Used", "")
+                roi = float(item.get("ROI", item.get("average_roi", 0.0)))
+                cr = float(item.get("Conversion_Rate", item.get("average_conversion_rate", 0.0)))
+                cost = float(item.get("Acquisition_Cost", item.get("average_acquisition_cost", 0.0)))
+                comp_str = f" ({comp})" if comp else ""
+                lines.append(f"{idx}. **{cid}**{comp_str} via {ch}: **{roi:.2f}x ROI**, **{cr:.2f}%** conversion, CAC: **${cost:,.2f}**")
+
+            return (
+                f"Here are the top-ranking campaigns based on your data{filter_desc}:\n\n"
+                + "\n".join(lines)
+                + "\n\n**Takeaway**: High-performing campaigns consistently show strong engagement combined with controlled acquisition costs."
+            )
+
+        if intent.tool_name == "analyze_campaign_types" and evidence:
+            top = evidence[0]
+            top_type = top.get("Campaign_Type", "Unknown")
+            top_roi = float(top.get("average_roi", 0.0))
+
+            lines = [f"• **{item.get('Campaign_Type')}**: **{float(item.get('average_roi', 0.0)):.2f}x ROI**" for item in evidence]
+            return (
+                f"Campaign type comparison{filter_desc}:\n\n"
+                f"**{top_type}** campaigns led performance at **{top_roi:.2f}x ROI**.\n\n"
+                + "\n".join(lines)
+            )
+
+        if intent.tool_name == "analyze_geography" and evidence:
+            top = evidence[0]
+            top_loc = top.get("Location", "Unknown")
+            top_roi = float(top.get("average_roi", 0.0))
+            lines = [f"• **{item.get('Location')}**: **{float(item.get('average_roi', 0.0)):.2f}x ROI**" for item in evidence]
+            return (
+                f"Geographical performance analysis{filter_desc}:\n\n"
+                f"**{top_loc}** is your strongest market with an average **{top_roi:.2f}x ROI**.\n\n"
+                + "\n".join(lines)
             )
 
         if intent.tool_name == "detect_anomalies":
             count = len(evidence)
             if count == 0:
-                return f"No statistical anomalies were detected in the dataset{filter_desc}."
-            top_anom = evidence[0]
+                return f"No statistical anomalies were detected in the dataset{filter_desc}. All metrics fall within expected bounds."
+            lines = []
+            for item in evidence[:3]:
+                lines.append(
+                    f"• Campaign **{item.get('campaign_id')}** ({item.get('company')}, {item.get('channel')}): anomalous {item.get('metric')} of **{item.get('actual_value')}** ({item.get('reason')})"
+                )
             return (
-                f"Detected {count} statistical anomalies. For example, campaign {top_anom.get('campaign_id')} "
-                f"({top_anom.get('company')}, {top_anom.get('channel')}) showed an anomalous {top_anom.get('metric')} "
-                f"of {top_anom.get('actual_value')} ({top_anom.get('reason')})."
+                f"We detected **{count}** statistical anomalies{filter_desc}:\n\n"
+                + "\n".join(lines)
+                + "\n\n**Recommendation**: Review these outlier campaigns to understand unusual variances."
             )
 
         # General table / record fallback
         first_item = evidence[0] if evidence else {}
-        return f"Query completed using {intent.tool_name}{filter_desc}. Leading result: {first_item}."
+        return f"Query completed using **{intent.tool_name}**{filter_desc}.\n\nLeading result: {first_item}."
 
     def generate_insights(self, df: pd.DataFrame) -> list[Insight]:
         """

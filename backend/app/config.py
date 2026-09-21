@@ -28,6 +28,15 @@ class Settings(BaseModel):
     GEMINI_PROJECT_NUMBER: str | None = Field(default_factory=lambda: os.getenv("GEMINI_PROJECT_NUMBER"))
     LLM_PROVIDER: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "gemini"))
 
+    # Power BI Service / Fabric settings
+    POWERBI_CLIENT_ID: str | None = Field(default_factory=lambda: os.getenv("POWERBI_CLIENT_ID"))
+    POWERBI_CLIENT_SECRET: str | None = Field(default_factory=lambda: os.getenv("POWERBI_CLIENT_SECRET"))
+    POWERBI_TENANT_ID: str | None = Field(default_factory=lambda: os.getenv("POWERBI_TENANT_ID"))
+    POWERBI_WORKSPACE_ID: str | None = Field(default_factory=lambda: os.getenv("POWERBI_WORKSPACE_ID"))
+    POWERBI_AUTHORITY_URL: str = Field(default_factory=lambda: os.getenv("POWERBI_AUTHORITY_URL", "https://login.microsoftonline.com"))
+    POWERBI_SCOPE: str = Field(default_factory=lambda: os.getenv("POWERBI_SCOPE", "https://analysis.windows.net/powerbi/api/.default"))
+    POWERBI_MOCK_PUBLISHING: bool = Field(default_factory=lambda: os.getenv("POWERBI_MOCK_PUBLISHING", "true").lower() in ("true", "1", "yes"))
+
     def setup_directories(self) -> None:
         """Ensure necessary runtime directories exist."""
         self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

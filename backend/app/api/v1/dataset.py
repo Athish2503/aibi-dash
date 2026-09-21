@@ -107,11 +107,18 @@ async def profile_uploaded_dataset(file: UploadFile = File(...)):
         )
 
 
+HTTP_422 = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
+
+
 @router.post("/pipeline", response_model=DatasetPipelineResponse)
-async def process_dataset_pipeline(file: UploadFile = File(...)):
+async def process_dataset_pipeline(
+    file: UploadFile = File(...),
+    strict: bool = Query(default=False, description="Whether to fail on missing standard marketing columns"),
+):
     """
     Executes the complete dataset intelligence pipeline:
-    Inspect -> Validate -> Clean -> Profile (supports CSV and XLSX)
+    Inspect -> Validate -> Clean -> Profile (supports CSV and XLSX).
+    When strict=False, allows flexible custom schemas while reporting quality/schema warnings.
     """
     content, filename = await _read_and_validate_upload(file)
     try:
@@ -122,11 +129,11 @@ async def process_dataset_pipeline(file: UploadFile = File(...)):
         raw_df, _ = load_dataset_into_df(content, file_name=filename)
         validation = validate_dataset(raw_df, file_name=filename)
 
-        if not validation.is_valid:
+        if strict and not validation.is_valid:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=HTTP_422,
                 detail={
-                    "message": "Dataset failed schema validation",
+                    "message": "Dataset failed strict marketing schema validation",
                     "validation": validation.model_dump(),
                 },
             )
@@ -151,7 +158,7 @@ async def process_dataset_pipeline(file: UploadFile = File(...)):
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422,
             detail=f"Failed to process dataset pipeline: {str(e)}",
         )
 
@@ -161,6 +168,7 @@ async def generate_dashboard_plan_for_dataset(
     file: UploadFile = File(...),
     ai_assisted: bool = Query(default=False, description="Whether to customize the plan using Gemini AI"),
     prompt: Optional[str] = Query(default=None, description="Optional analytical goals or customization instructions"),
+    strict: bool = Query(default=False, description="Whether to enforce strict marketing schema"),
 ):
     """
     Generates a Power BI-ready typed DashboardPlan for an uploaded CSV/XLSX dataset.
@@ -170,9 +178,9 @@ async def generate_dashboard_plan_for_dataset(
     try:
         raw_df, _ = load_dataset_into_df(content, file_name=filename)
         validation = validate_dataset(raw_df, file_name=filename)
-        if not validation.is_valid:
+        if strict and not validation.is_valid:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=HTTP_422,
                 detail={
                     "message": "Dataset failed schema validation prior to planning",
                     "validation": validation.model_dump(),
@@ -202,7 +210,7 @@ async def generate_dashboard_plan_for_dataset(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=HTTP_422,
             detail=f"Failed to generate dashboard plan: {str(e)}",
         )
 

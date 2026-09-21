@@ -19,14 +19,23 @@ from backend.app.powerbi.schemas import (
     PowerBIValidationResult,
     DesktopEnvironmentStatus,
 )
+from backend.app.powerbi.service_schemas import (
+    PublishRequest,
+    PublishingResult,
+    ServiceConfigStatus,
+    RefreshRequest,
+    RefreshResult,
+)
 from backend.app.powerbi.project_builder import ProjectBuilder
 from backend.app.powerbi.validator import PowerBIArtifactValidator
 from backend.app.powerbi.desktop_validator import PowerBIDesktopValidator
+from backend.app.powerbi.service_adapter import PowerBIServiceAdapter
 
 router = APIRouter()
 project_builder = ProjectBuilder()
 artifact_validator = PowerBIArtifactValidator()
 desktop_validator = PowerBIDesktopValidator()
+service_adapter = PowerBIServiceAdapter()
 
 
 class GeneratePowerBIRequest(BaseModel):
@@ -204,4 +213,40 @@ async def download_powerbi_bundle(artifact_id: str):
         path=zip_path,
         media_type="application/zip",
         filename=filename,
+    )
+
+
+# --- Power BI Service / Fabric Endpoints ---
+
+@router.get("/service/status", response_model=ServiceConfigStatus)
+async def get_service_status():
+    """
+    Returns Azure AD and Power BI Service configuration and authentication readiness.
+    """
+    return service_adapter.get_config_status()
+
+
+@router.post("/service/publish", response_model=PublishingResult)
+async def publish_to_service(request: PublishRequest):
+    """
+    Publishes a generated Power BI artifact to Power BI Service / Fabric,
+    progressing through: NOT_CONFIGURED -> AUTHENTICATED -> WORKSPACE_READY ->
+    MODEL_CREATED -> REPORT_CREATED -> PUBLISHED -> REFRESHED.
+    """
+    result = service_adapter.publish_project(
+        artifact_id=request.artifact_id,
+        workspace_id=request.workspace_id,
+        target_report_name=request.target_report_name,
+    )
+    return result
+
+
+@router.post("/service/refresh", response_model=RefreshResult)
+async def refresh_service_dataset(request: RefreshRequest):
+    """
+    Triggers an on-demand dataset refresh in Power BI Service.
+    """
+    return service_adapter.trigger_refresh(
+        dataset_id=request.dataset_id,
+        workspace_id=request.workspace_id,
     )
