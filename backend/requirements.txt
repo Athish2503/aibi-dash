@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pandas
+numpy
+pydantic
+python-dotenv
+openpyxl
+pytest
+httpx

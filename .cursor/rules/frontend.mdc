@@ -1,0 +1,5 @@
+---
+description: Frontend coding rules
+globs: frontend/**/*.{ts,tsx,js,jsx}
+---
+Keep API calls in service modules. Keep components focused. Model loading/success/error states. Do not hard-code analytical results.

@@ -1,0 +1,5 @@
+---
+description: AI agent rules
+globs: backend/app/agent/**/*.py
+---
+The LLM orchestrates; tools calculate. Validate structured model output. Never fabricate metrics. Record tools and evidence for analytical answers. Never execute arbitrary generated code.

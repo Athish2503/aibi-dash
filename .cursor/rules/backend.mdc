@@ -1,0 +1,5 @@
+---
+description: Backend coding rules
+globs: backend/**/*.py
+---
+Use typed interfaces. Keep routes thin. Keep analytics deterministic. Add pytest coverage. Do not mutate dataframes in-place unless intentional.

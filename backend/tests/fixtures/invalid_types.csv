@@ -1,0 +1,3 @@
+Campaign_ID,Company,Campaign_Type,Target_Audience,Duration,Channel_Used,Conversion_Rate,Acquisition_Cost,ROI,Location
+CMP-301,TechCorp,Search,Tech,30,Google Ads,invalid_rate,-100.00,corrupted_roi,US
+CMP-302,HealthPlus,Social,Health,15,Facebook,0.05,200.00,2.1,UK

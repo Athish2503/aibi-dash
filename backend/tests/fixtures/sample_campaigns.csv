@@ -1,0 +1,11 @@
+Campaign_ID,Company,Campaign_Type,Target_Audience,Duration,Channel_Used,Conversion_Rate,Acquisition_Cost,ROI,Location
+CMP-101,TechCorp,Search,Tech Enthusiasts,30 days,Google Ads,0.085,450.00,3.2,US
+CMP-102,HealthPlus,Social,Health & Wellness,15 Days,Facebook,0.042,210.50,1.8,UK
+CMP-103,RetailMax,Display,Young Adults,45,Instagram,0.061,320.00,2.5,Canada
+CMP-104,TechCorp,Email,Professionals,60 days,Email,0.120,95.00,5.1,US
+CMP-105,HealthPlus,Video,Men 25-40,30,YouTube,0.035,580.00,1.2,Germany
+CMP-106,RetailMax,Search,Parents,30 days,Google Ads,0.092,390.00,3.8,US
+CMP-107,FinanceInc,Social,Investors,15,LinkedIn,0.078,720.00,4.0,UK
+CMP-108,FinanceInc,Email,High Net Worth,45 days,Email,0.145,110.00,6.3,US
+CMP-109,AutoDrive,Video,Car Enthusiasts,60,YouTube,0.029,650.00,0.9,Germany
+CMP-110,AutoDrive,Display,Young Adults,30 days,Google Ads,0.055,280.00,2.1,Canada

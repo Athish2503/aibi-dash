@@ -1,0 +1,5 @@
+---
+description: Global project rules
+alwaysApply: true
+---
+Read AGENTS.md before major changes. Follow PRD/SRS. Keep changes small, tested, and documented. Never commit secrets.
