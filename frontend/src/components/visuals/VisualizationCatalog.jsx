@@ -14,69 +14,100 @@ import {
 
 /**
  * 1. Target Progress Gauge
- * Shows progress toward a target metric in a circular arc.
+ * Shows progress toward a target metric in a modern semi-circular speedometer gauge.
  */
 export function GaugeVisual({
-  title = 'ROI Target Progress',
-  currentValue = 4.82,
+  title = 'ROI Performance Gauge',
+  currentValue = 5.04,
   targetValue = 5.0,
   unit = 'x',
   min = 0,
   max = 6,
 }) {
   const percentage = Math.min(100, Math.max(0, Math.round(((currentValue - min) / (max - min)) * 100)));
-  const circumference = 2 * Math.PI * 40;
-  const strokeDashoffset = circumference - (percentage / 100) * (circumference * 0.75);
+  const isAchieved = currentValue >= targetValue;
+
+  // Semi-circular arc parameters (radius 54, arc length = PI * 54 = 169.6)
+  const radius = 54;
+  const arcLength = Math.PI * radius;
+  const strokeDashoffset = arcLength - (percentage / 100) * arcLength;
 
   return (
-    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/25 flex flex-col items-center justify-between h-full">
-      <div className="w-full flex items-center justify-between">
-        <span className="text-xs font-bold text-on-surface">{title}</span>
-        <span className="text-[10px] text-secondary font-mono">Target: {targetValue}{unit}</span>
+    <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col justify-between h-full shadow-xs">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-outline-variant/15">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-primary"></span>
+          <span className="text-xs font-bold text-on-surface">{title}</span>
+        </div>
+        <span className="text-[11px] font-mono text-secondary px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant/30">
+          Target: {targetValue}{unit}
+        </span>
       </div>
 
-      <div className="relative flex items-center justify-center my-3">
-        <svg className="w-32 h-32 transform -rotate-135">
+      {/* Semi-Circular SVG Speedometer */}
+      <div className="relative flex flex-col items-center justify-center my-2">
+        <svg viewBox="0 0 140 85" className="w-44 h-28 overflow-visible">
+          <defs>
+            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#2563eb" />
+              <stop offset="70%" stopColor="#3b82f6" />
+              <stop offset="100%" stopColor="#10b981" />
+            </linearGradient>
+          </defs>
+
           {/* Background Track */}
-          <circle
-            cx="64"
-            cy="64"
-            r="40"
-            stroke="currentColor"
+          <path
+            d="M 16 75 A 54 54 0 0 1 124 75"
+            fill="none"
+            stroke="#e2e8f0"
             strokeWidth="10"
-            fill="transparent"
-            strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
-            className="text-outline-variant/30"
+            strokeLinecap="round"
           />
-          {/* Progress Indicator */}
-          <circle
-            cx="64"
-            cy="64"
-            r="40"
-            stroke="currentColor"
+
+          {/* Progress Arc */}
+          <path
+            d="M 16 75 A 54 54 0 0 1 124 75"
+            fill="none"
+            stroke="url(#gaugeGradient)"
             strokeWidth="10"
-            fill="transparent"
-            strokeDasharray={circumference}
+            strokeDasharray={arcLength}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            className="text-primary transition-all duration-700"
+            className="transition-all duration-700 ease-out"
           />
+
+          {/* Target Benchmark Tick Mark */}
+          <circle cx="112" cy="38" r="3.5" fill="#0f172a" stroke="#ffffff" strokeWidth="1.5" />
         </svg>
 
-        <div className="absolute flex flex-col items-center">
-          <span className="text-2xl font-bold text-on-surface tracking-tight">
+        {/* Value Overlay */}
+        <div className="absolute bottom-1 flex flex-col items-center">
+          <div className="text-2xl font-extrabold text-on-surface tracking-tight tabular-nums">
             {currentValue}{unit}
-          </span>
-          <span className="text-[10px] text-emerald-600 font-semibold">
-            {percentage}% to Goal
+          </div>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+              isAchieved
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-primary-fixed/40 text-primary border border-primary/20'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[11px]">
+              {isAchieved ? 'verified' : 'trending_up'}
+            </span>
+            <span>{percentage}% to Benchmark</span>
           </span>
         </div>
       </div>
 
-      <div className="w-full flex items-center justify-between text-[10px] text-secondary border-t border-outline-variant/20 pt-2">
-        <span>Min: {min}{unit}</span>
-        <span className="font-semibold text-primary">{currentValue >= targetValue ? 'Goal Achieved' : 'On Track'}</span>
-        <span>Max: {max}{unit}</span>
+      {/* Min/Max Footer */}
+      <div className="flex items-center justify-between text-[10px] text-secondary border-t border-outline-variant/15 pt-2">
+        <span className="font-mono">Min {min}{unit}</span>
+        <span className="font-bold text-emerald-600">
+          {isAchieved ? 'Goal Exceeded (+0.04x)' : 'On Track'}
+        </span>
+        <span className="font-mono">Max {max}{unit}</span>
       </div>
     </div>
   );
@@ -84,50 +115,65 @@ export function GaugeVisual({
 
 /**
  * 2. Conversion Funnel Visual
- * Visualizes sequential campaign workflow stages with drop-off rates.
+ * Visualizes sequential campaign workflow stages with drop-off rates and step efficiency.
  */
 export function FunnelVisual({
-  title = 'Campaign Conversion Funnel',
+  title = 'Conversion Pipeline Funnel',
   stages = [
-    { name: 'Impressions', value: 1250000, rate: '100%' },
-    { name: 'Ad Clicks', value: 98000, rate: '7.8%' },
-    { name: 'Engaged Leads', value: 14200, rate: '14.5%' },
-    { name: 'Conversions', value: 2150, rate: '15.1%' },
+    { name: 'Impressions', value: 1250000, rate: '100%', drop: null },
+    { name: 'Ad Clicks', value: 98000, rate: '7.8% CTR', drop: '-92.2%' },
+    { name: 'Engaged Leads', value: 14200, rate: '14.5% Lead Rate', drop: '-85.5%' },
+    { name: 'Conversions', value: 2150, rate: '15.1% Close Rate', drop: '-84.9%' },
   ],
 }) {
   const maxVal = stages[0]?.value || 1;
 
   return (
-    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/25 flex flex-col h-full">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold text-on-surface">{title}</span>
-        <span className="text-[10px] text-secondary font-mono">Stage Efficiency</span>
+    <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col justify-between h-full shadow-xs">
+      <div className="flex items-center justify-between pb-2 border-b border-outline-variant/15">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+          <span className="text-xs font-bold text-on-surface">{title}</span>
+        </div>
+        <span className="text-[11px] font-mono text-secondary px-2 py-0.5 rounded bg-surface-container-low border border-outline-variant/30">
+          Stage Efficiency
+        </span>
       </div>
 
-      <div className="flex flex-col gap-2.5 flex-1 justify-center">
+      <div className="flex flex-col gap-2 my-auto py-1">
         {stages.map((stage, idx) => {
-          const widthPct = Math.max(20, Math.round((stage.value / maxVal) * 100));
+          const widthPct = Math.max(18, Math.round((stage.value / maxVal) * 100));
           return (
             <div key={idx} className="flex flex-col gap-1">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-medium text-on-surface flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/70"></span>
+                <span className="font-semibold text-on-surface flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
                   {stage.name}
                 </span>
-                <span className="text-secondary font-mono">
-                  {stage.value.toLocaleString()} ({stage.rate})
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-on-surface font-bold">
+                    {stage.value.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-semibold text-primary px-1.5 py-0.2 rounded bg-primary-fixed/30 border border-primary/20">
+                    {stage.rate}
+                  </span>
+                </div>
               </div>
 
-              <div className="w-full h-4 bg-surface-container rounded-md overflow-hidden flex items-center">
+              <div className="w-full h-3.5 bg-surface-container-low rounded-md overflow-hidden flex items-center p-0.5 border border-outline-variant/20">
                 <div
-                  className="h-full bg-gradient-to-r from-primary to-primary-fixed rounded-md transition-all duration-500"
+                  className="h-full rounded-sm bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 transition-all duration-500 shadow-xs"
                   style={{ width: `${widthPct}%` }}
                 ></div>
               </div>
             </div>
           );
         })}
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-secondary border-t border-outline-variant/15 pt-2">
+        <span>Total Visitors: <strong>1.25M</strong></span>
+        <span className="font-bold text-primary">End-to-End: 0.17% Conversion</span>
       </div>
     </div>
   );
@@ -479,8 +525,11 @@ export function AnomalyDetectionVisual({
 /**
  * 8. Area Chart for Duration Trends
  */
+/**
+ * 8. Area Chart for Duration Trends
+ */
 export function DurationTrendVisual({
-  title = 'ROI & Conversion Efficiency by Duration',
+  title = 'Campaign Duration Efficiency',
   data = [
     { duration: '14 Days', roi: 3.95, conv: 7.2 },
     { duration: '15 Days', roi: 5.40, conv: 9.8 },
@@ -491,31 +540,55 @@ export function DurationTrendVisual({
   ],
 }) {
   return (
-    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/25 flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-bold text-on-surface">{title}</span>
-        <span className="text-[10px] text-secondary font-mono">Duration Curve</span>
+    <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col justify-between h-full shadow-xs">
+      <div className="flex items-center justify-between pb-2 border-b border-outline-variant/15">
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-sky-500"></span>
+          <span className="text-xs font-bold text-on-surface">{title}</span>
+        </div>
+        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+          Peak: 15–21 Days
+        </span>
       </div>
 
-      <div className="h-56 w-full">
+      <div className="h-44 w-full my-1">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={data} margin={{ top: 12, right: 12, left: -22, bottom: 0 }}>
             <defs>
-              <linearGradient id="roiGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
+              <linearGradient id="roiGradientExecutive" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#2563eb" stopOpacity={0.45} />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis dataKey="duration" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}x`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="duration" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(v) => `${v}x`} axisLine={false} tickLine={false} />
             <Tooltip
-              formatter={(value) => [`${value}x ROI`, 'ROI']}
-              contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '11px', border: '1px solid #cbd5e1' }}
+              formatter={(value) => [`${value}x ROI`, 'Average Return']}
+              contentStyle={{
+                backgroundColor: '#0f172a',
+                borderRadius: '8px',
+                fontSize: '11px',
+                border: 'none',
+                color: '#f8fafc',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              }}
             />
-            <Area type="monotone" dataKey="roi" stroke="#3b82f6" strokeWidth={2.5} fillOpacity={1} fill="url(#roiGradient)" />
+            <Area
+              type="monotone"
+              dataKey="roi"
+              stroke="#2563eb"
+              strokeWidth={3}
+              fillOpacity={1}
+              fill="url(#roiGradientExecutive)"
+            />
           </AreaChart>
         </ResponsiveContainer>
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-secondary border-t border-outline-variant/15 pt-2">
+        <span>Lifecycle Horizon: 14 to 45 Days</span>
+        <span className="font-bold text-primary">Benchmark: 4.8x ROI Target</span>
       </div>
     </div>
   );

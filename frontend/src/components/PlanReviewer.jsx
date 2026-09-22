@@ -67,6 +67,7 @@ export default function PlanReviewer({
   onApproveAndGenerate,
   isGenerating,
   datasetRows = [],
+  onOpenDaxStudio,
 }) {
   const [selectedPreviewSection, setSelectedPreviewSection] = useState(1);
   const metrics = computeDatasetMetrics(datasetRows) || {};
@@ -100,24 +101,38 @@ export default function PlanReviewer({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onApproveAndGenerate}
-            disabled={isGenerating}
-            className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Generating Power BI Dashboard...</span>
-              </>
-            ) : (
-              <>
-                <span>Generate Power BI Dashboard</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {onOpenDaxStudio && (
+              <button
+                type="button"
+                onClick={onOpenDaxStudio}
+                className="px-4 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs"
+                title="Open DAX Formula Studio & Business Logic Editor"
+              >
+                <span className="material-symbols-outlined text-sm text-indigo-600">functions</span>
+                <span>DAX Studio</span>
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={onApproveAndGenerate}
+              disabled={isGenerating}
+              className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Generating Power BI Dashboard...</span>
+                </>
+              ) : (
+                <>
+                  <span>Generate Power BI Dashboard</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Evaluation Checklist */}

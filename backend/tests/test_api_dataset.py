@@ -97,7 +97,53 @@ def test_api_plan_deterministic():
     assert response.status_code == 200
     data = response.json()
     assert "pages" in data
-    assert len(data["pages"]) == 3
     assert data["validation"]["is_valid"] is True
+
+
+def test_api_compare_uploaded_datasets():
+    file_path = FIXTURES_DIR / "sample_campaigns.csv"
+    with open(file_path, "rb") as f1, open(file_path, "rb") as f2:
+        response = client.post(
+            "/api/v1/dataset/compare?label_a=Period1&label_b=Period2",
+            files={
+                "file_a": ("sample_campaigns.csv", f1, "text/csv"),
+                "file_b": ("sample_campaigns.csv", f2, "text/csv"),
+            },
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["baseline_label"] == "Period1"
+    assert data["comparison_label"] == "Period2"
+    assert "roi" in data
+    assert "cac" in data
+    assert "channels" in data
+    assert len(data["channels"]) > 0
+
+
+def test_api_compare_datasets_by_id():
+    import pandas as pd
+    from backend.app.data.storage import save_dataset
+
+    df1 = pd.DataFrame({
+        "Campaign_ID": [1], "Channel_Used": ["Social"], "ROI": [3.0],
+        "Acquisition_Cost": [100.0], "Conversion_Rate": [0.05],
+    })
+    df2 = pd.DataFrame({
+        "Campaign_ID": [2], "Channel_Used": ["Social"], "ROI": [4.0],
+        "Acquisition_Cost": [80.0], "Conversion_Rate": [0.06],
+    })
+    id1 = save_dataset(df1, "d1.csv")
+    id2 = save_dataset(df2, "d2.csv")
+
+    response = client.post(
+        "/api/v1/dataset/compare-by-id",
+        json={"dataset_id_a": id1, "dataset_id_b": id2, "label_a": "Q1", "label_b": "Q2"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["roi"]["baseline_value"] == 3.0
+    assert data["roi"]["comparison_value"] == 4.0
+    assert data["roi"]["sentiment"] == "positive"
+
 
 

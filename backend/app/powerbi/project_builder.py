@@ -131,6 +131,79 @@ class ProjectBuilder:
             json.dump(pbip_manifest.model_dump(), f, indent=2)
         files_created.append(pbip_file_path)
 
+        # 4b. Generate One-Click Launcher Scripts (run_in_powerbi.bat & launch_report.ps1)
+        bat_script_path = os.path.join(project_dir, "run_in_powerbi.bat")
+        bat_content = f"""@echo off
+setlocal
+echo ========================================================
+echo  Power BI Project One-Click Launcher
+echo  Project: {project_name}.pbip
+echo ========================================================
+echo Opening project in Microsoft Power BI Desktop...
+
+REM Attempt to open via Windows default association
+start "" "%~dp0{project_name}.pbip"
+if %errorlevel% equ 0 (
+    echo [OK] Power BI launch requested successfully.
+    goto end
+)
+
+REM Fallback to standard executable paths
+set "PBI_EXE=C:\\Program Files\\Microsoft Power BI Desktop\\bin\\PBIDesktop.exe"
+if exist "%PBI_EXE%" (
+    echo Launching via %PBI_EXE%...
+    start "" "%PBI_EXE%" "%~dp0{project_name}.pbip"
+    goto end
+)
+
+echo [!] Could not locate Power BI Desktop or file association.
+echo Please install Power BI Desktop or open "%~dp0{project_name}.pbip" manually.
+pause
+
+:end
+endlocal
+"""
+        with open(bat_script_path, "w", encoding="utf-8") as f:
+            f.write(bat_content)
+        files_created.append(bat_script_path)
+
+        ps1_script_path = os.path.join(project_dir, "launch_report.ps1")
+        ps1_content = f"""<#
+.SYNOPSIS
+One-Click Power BI Desktop Launcher for {project_name}
+#>
+$ProjectDir = $PSScriptRoot
+$PbipPath = Join-Path $ProjectDir "{project_name}.pbip"
+
+Write-Host "========================================================" -ForegroundColor Cyan
+Write-Host " Power BI Project One-Click Launcher" -ForegroundColor Cyan
+Write-Host " Project: $PbipPath" -ForegroundColor DarkCyan
+Write-Host "========================================================" -ForegroundColor Cyan
+
+if (-not (Test-Path $PbipPath)) {{
+    Write-Error "Project file not found: $PbipPath"
+    exit 1
+}}
+
+Write-Host "Launching in Power BI Desktop..." -ForegroundColor Green
+try {{
+    Start-Process -FilePath $PbipPath
+    Write-Host "[OK] Power BI Desktop launched successfully." -ForegroundColor Green
+}} catch {{
+    Write-Warning "Could not launch via file association. Attempting standard installation path..."
+    $DefaultExe = "C:\\Program Files\\Microsoft Power BI Desktop\\bin\\PBIDesktop.exe"
+    if (Test-Path $DefaultExe) {{
+        Start-Process -FilePath $DefaultExe -ArgumentList "`"$PbipPath`""
+        Write-Host "[OK] Launched via $DefaultExe" -ForegroundColor Green
+    }} else {{
+        Write-Error "Power BI Desktop is not detected. Please install Power BI Desktop to open .pbip files."
+    }}
+}}
+"""
+        with open(ps1_script_path, "w", encoding="utf-8") as f:
+            f.write(ps1_content)
+        files_created.append(ps1_script_path)
+
         # 5. Package as ZIP archive
         zip_path = os.path.join(artifact_dir, f"{project_name}.zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_f:

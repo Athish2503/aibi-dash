@@ -10,7 +10,7 @@ import {
   ScatterChart,
   Scatter,
 } from 'recharts';
-import { getDownloadUrl, launchPowerBIDesktop, publishToService } from '../services/api';
+import { getDownloadUrl, getLauncherScriptUrl, launchPowerBIDesktop, publishToService } from '../services/api';
 import { computeDatasetMetrics } from '../utils/csvParser';
 import {
   GaugeVisual,
@@ -122,10 +122,10 @@ export default function GenerationResult({
   };
 
   const pages = [
-    { id: 1, label: '01 Executive Overview', icon: 'dashboard' },
-    { id: 2, label: '02 Channel Performance', icon: 'leaderboard' },
-    { id: 3, label: '03 Audience & Campaign Analysis', icon: 'group' },
-    { id: 4, label: '04 Cost & Geographic Performance', icon: 'public' },
+    { id: 1, label: 'Executive Overview', icon: 'dashboard' },
+    { id: 2, label: 'Channel Performance', icon: 'leaderboard' },
+    { id: 3, label: 'Audience & Segmentation', icon: 'group' },
+    { id: 4, label: 'Geographic & Cost Performance', icon: 'public' },
   ];
 
   // Render a custom visual based on user configuration
@@ -153,76 +153,107 @@ export default function GenerationResult({
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col py-2 animate-fade-in gap-4">
-      {/* Top Banner with Project Actions & Add Visual */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="w-full flex-1 flex flex-col py-2 animate-fade-in gap-3.5">
+      {/* Executive Header Toolbar */}
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        {/* Report Identity & Metadata */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-700 text-white flex items-center justify-center font-bold shadow-xs">
             <span className="material-symbols-outlined text-xl">insights</span>
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-on-surface">Interactive Power BI Report</h1>
+              <h1 className="text-base font-bold text-on-surface tracking-tight">Interactive Power BI Report</h1>
               <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 PBIR Standard Generated
               </span>
             </div>
-            <span className="text-[11px] text-secondary">
-              Artifact: <code className="font-mono text-primary font-semibold">{artifact_id}</code> • {Number(totalRecords).toLocaleString()} records compiled
-            </span>
+            <div className="flex items-center gap-2 text-[11px] text-secondary mt-0.5">
+              <span>Artifact: <code className="font-mono text-primary font-semibold">{artifact_id}</code></span>
+              <span>•</span>
+              <span>{Number(totalRecords).toLocaleString()} records compiled</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline text-emerald-600 font-medium">DirectQuery Emulated</span>
+            </div>
           </div>
         </div>
 
-        {/* Global Toolbar Buttons */}
+        {/* Global Action Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Visual Customization */}
           <button
             type="button"
             onClick={() => setIsAddVisualOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-primary-fixed hover:bg-primary-fixed/80 text-primary text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+            className="h-9 px-3 rounded-xl bg-primary/5 hover:bg-primary/10 border border-primary/20 text-primary text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
           >
-            <span className="material-symbols-outlined text-sm">add_chart</span>
+            <span className="material-symbols-outlined text-base">add_chart</span>
             <span>+ Add Visual</span>
           </button>
 
-          <a
-            href={getDownloadUrl(artifact_id)}
-            download
-            className="px-3.5 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-xs font-semibold text-on-surface transition-all flex items-center gap-1.5"
-            title="Download PBIR bundle"
-          >
-            <span className="material-symbols-outlined text-sm text-primary">download</span>
-            <span>Export PBIR</span>
-          </a>
-
+          {/* Desktop Launcher (Primary CTA) */}
           <button
             type="button"
             onClick={handleLaunch}
             disabled={isLaunching}
-            className="px-3.5 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-xs font-semibold text-on-surface transition-all flex items-center gap-1.5"
-            title="Launch in local Power BI Desktop"
+            className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 text-xs font-extrabold shadow-sm transition-all flex items-center gap-1.5"
+            title="Launch natively in local Microsoft Power BI Desktop"
           >
-            <span className="material-symbols-outlined text-sm text-amber-600">desktop_windows</span>
-            <span>{isLaunching ? 'Launching...' : 'Open Desktop'}</span>
+            <span className="material-symbols-outlined text-base font-bold">bolt</span>
+            <span>{isLaunching ? 'Launching Desktop...' : '1-Click Launch Desktop'}</span>
           </button>
 
+          {/* Project Package Download Group */}
+          <div className="flex items-center rounded-xl bg-surface-container-low border border-outline-variant/30 p-0.5 shadow-xs">
+            <a
+              href={getDownloadUrl(artifact_id)}
+              download
+              className="h-8 px-2.5 rounded-lg hover:bg-surface-container text-xs font-semibold text-on-surface transition-all flex items-center gap-1.5"
+              title="Download full standalone Power BI Project bundle (.zip)"
+            >
+              <span className="material-symbols-outlined text-sm text-primary">download</span>
+              <span>Download .PBIP</span>
+            </a>
+            <div className="w-[1px] h-4 bg-outline-variant/30 mx-0.5" />
+            <a
+              href={getLauncherScriptUrl(artifact_id, 'bat')}
+              download="run_in_powerbi.bat"
+              className="h-8 px-2 rounded-lg hover:bg-surface-container text-[11px] font-mono text-secondary hover:text-on-surface transition-all flex items-center gap-1"
+              title="Download Windows one-click batch launcher (.bat)"
+            >
+              <span className="material-symbols-outlined text-xs text-amber-600">terminal</span>
+              <span>.bat</span>
+            </a>
+            <a
+              href={getLauncherScriptUrl(artifact_id, 'ps1')}
+              download="launch_report.ps1"
+              className="h-8 px-2 rounded-lg hover:bg-surface-container text-[11px] font-mono text-secondary hover:text-on-surface transition-all flex items-center gap-1"
+              title="Download PowerShell one-click launcher (.ps1)"
+            >
+              <span className="material-symbols-outlined text-xs text-sky-600">code</span>
+              <span>.ps1</span>
+            </a>
+          </div>
+
+          {/* Cloud Publishing */}
           <button
             type="button"
             onClick={handlePublish}
             disabled={isPublishing}
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+            className="h-9 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
           >
-            <span className="material-symbols-outlined text-sm">cloud_upload</span>
+            <span className="material-symbols-outlined text-base">cloud_upload</span>
             <span>{isPublishing ? 'Publishing...' : 'Publish'}</span>
           </button>
 
+          {/* New Project / Reset */}
           <button
             type="button"
             onClick={onReset}
-            className="p-2 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container text-xs"
-            title="New Project"
+            className="h-9 w-9 rounded-xl text-secondary hover:text-on-surface hover:bg-surface-container border border-outline-variant/30 flex items-center justify-center transition-colors"
+            title="Start New Project"
           >
-            <span className="material-symbols-outlined text-base">restart_alt</span>
+            <span className="material-symbols-outlined text-lg">restart_alt</span>
           </button>
         </div>
       </div>
@@ -237,16 +268,16 @@ export default function GenerationResult({
               setLaunchMessage(null);
               setPublishMessage(null);
             }}
-            className="text-blue-700 font-bold ml-3"
+            className="text-blue-700 font-bold ml-3 hover:text-blue-900"
           >
             ✕
           </button>
         </div>
       )}
 
-      {/* Multi-Page Report Tab Bar */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-sm flex items-center justify-between gap-2 overflow-x-auto select-none no-scrollbar">
-        <div className="flex items-center gap-1.5">
+      {/* Multi-Page Report Tab Bar (Segmented Navigation) */}
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-1.5 shadow-xs flex items-center justify-between gap-2 overflow-x-auto select-none no-scrollbar">
+        <div className="flex items-center gap-1">
           {pages.map((p) => {
             const isActive = activePage === p.id;
             return (
@@ -254,9 +285,9 @@ export default function GenerationResult({
                 key={p.id}
                 type="button"
                 onClick={() => setActivePage(p.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
                   isActive
-                    ? 'bg-primary text-white shadow-sm'
+                    ? 'bg-primary text-white shadow-sm font-bold'
                     : 'text-secondary hover:text-on-surface hover:bg-surface-container-low'
                 }`}
               >
@@ -267,75 +298,82 @@ export default function GenerationResult({
           })}
         </div>
 
-        <span className="text-[10px] text-secondary font-mono px-3 hidden md:inline">
-          Report Canvas • 4 Pages Generated
-        </span>
+        <div className="flex items-center gap-2 px-3 text-[10px] text-secondary font-mono hidden md:flex">
+          <span className="material-symbols-outlined text-xs text-secondary">desktop_windows</span>
+          <span>Report Canvas • 1080p Standard</span>
+        </div>
       </div>
 
-      {/* Interactive Slicers & Cross-Filtering Toolbar */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-4 text-xs">
-          {/* Channel Slicer */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-secondary font-semibold text-[11px]">Channel:</span>
-            <div className="flex items-center gap-1">
-              {['All', ...channelOptions].map((ch) => (
-                <button
-                  key={ch}
-                  type="button"
-                  onClick={() => setActiveChannel(ch)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                    activeChannel === ch
-                      ? 'bg-primary text-white font-bold shadow-xs'
-                      : 'bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface'
-                  }`}
-                >
-                  {ch}
-                </button>
-              ))}
-            </div>
+      {/* Executive Slicers & Cross-Filtering Ribbon */}
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {/* Slicers Label */}
+          <div className="flex items-center gap-1.5 text-secondary pr-2 border-r border-outline-variant/30">
+            <span className="material-symbols-outlined text-sm text-primary">filter_alt</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase">Slicers</span>
           </div>
 
-          {/* Audience Slicer */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-secondary font-semibold text-[11px]">Audience:</span>
-            <div className="flex items-center gap-1">
-              {['All', ...audienceOptions.slice(0, 3)].map((aud) => (
-                <button
-                  key={aud}
-                  type="button"
-                  onClick={() => setActiveAudience(aud)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                    activeAudience === aud
-                      ? 'bg-primary text-white font-bold shadow-xs'
-                      : 'bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface'
-                  }`}
-                >
-                  {aud}
-                </button>
+          {/* Channel Slicer Dropdown */}
+          <div className="flex items-center gap-1.5 bg-surface-container-low/70 hover:bg-surface-container-low px-2.5 py-1.5 rounded-xl border border-outline-variant/30 transition-colors">
+            <span className="text-[11px] font-semibold text-secondary">Channel:</span>
+            <select
+              value={activeChannel}
+              onChange={(e) => setActiveChannel(e.target.value)}
+              className="bg-transparent text-xs font-bold text-on-surface focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="All">All Channels ({channelOptions.length})</option>
+              {channelOptions.map((ch) => (
+                <option key={ch} value={ch}>{ch}</option>
               ))}
-            </div>
+            </select>
           </div>
 
-          {/* Location Slicer */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-secondary font-semibold text-[11px]">Region:</span>
-            <div className="flex items-center gap-1">
-              {['All', ...locationOptions].map((loc) => (
-                <button
-                  key={loc}
-                  type="button"
-                  onClick={() => setActiveLocation(loc)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                    activeLocation === loc
-                      ? 'bg-primary text-white font-bold shadow-xs'
-                      : 'bg-surface-container-low hover:bg-surface-container text-secondary hover:text-on-surface'
-                  }`}
-                >
-                  {loc}
-                </button>
+          {/* Audience Slicer Dropdown */}
+          <div className="flex items-center gap-1.5 bg-surface-container-low/70 hover:bg-surface-container-low px-2.5 py-1.5 rounded-xl border border-outline-variant/30 transition-colors">
+            <span className="text-[11px] font-semibold text-secondary">Audience:</span>
+            <select
+              value={activeAudience}
+              onChange={(e) => setActiveAudience(e.target.value)}
+              className="bg-transparent text-xs font-bold text-on-surface focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="All">All Audiences ({audienceOptions.length})</option>
+              {audienceOptions.map((aud) => (
+                <option key={aud} value={aud}>{aud}</option>
               ))}
-            </div>
+            </select>
+          </div>
+
+          {/* Region Slicer Dropdown */}
+          <div className="flex items-center gap-1.5 bg-surface-container-low/70 hover:bg-surface-container-low px-2.5 py-1.5 rounded-xl border border-outline-variant/30 transition-colors">
+            <span className="text-[11px] font-semibold text-secondary">Region:</span>
+            <select
+              value={activeLocation}
+              onChange={(e) => setActiveLocation(e.target.value)}
+              className="bg-transparent text-xs font-bold text-on-surface focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="All">All Regions ({locationOptions.length})</option>
+              {locationOptions.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Quick-select pills for top 3 channels */}
+          <div className="hidden lg:flex items-center gap-1 pl-1">
+            {channelOptions.slice(0, 3).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => setActiveChannel(activeChannel === ch ? 'All' : ch)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all ${
+                  activeChannel === ch
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-secondary hover:text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                {ch}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -345,15 +383,20 @@ export default function GenerationResult({
             <button
               type="button"
               onClick={handleClearFilters}
-              className="text-[11px] text-red-600 hover:text-red-800 font-semibold flex items-center gap-1 hover:underline"
+              className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[11px] font-bold flex items-center gap-1 transition-colors shadow-xs"
             >
               <span className="material-symbols-outlined text-xs">filter_alt_off</span>
-              <span>Clear Filter</span>
+              <span>Reset Filters</span>
             </button>
           )}
-          <span className="text-[10px] text-secondary font-mono bg-surface-container-low px-2 py-1 rounded-md">
-            Filtered: {filteredRows.length > 0 ? filteredRows.length : metrics.totalCampaigns} records
-          </span>
+          <div className="flex items-center gap-1.5 text-[11px] text-secondary font-mono bg-surface-container-low px-2.5 py-1 rounded-lg border border-outline-variant/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>
+              {isFiltered
+                ? `${Number(filteredRows.length).toLocaleString()} of ${Number(datasetRows.length || metrics.totalCampaigns).toLocaleString()} records`
+                : `${Number(datasetRows.length || metrics.totalCampaigns).toLocaleString()} records compiled`}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -361,53 +404,81 @@ export default function GenerationResult({
       {/* PAGE 1: EXECUTIVE OVERVIEW                                                */}
       {/* ========================================================================= */}
       {activePage === 1 && (
-        <div className="flex flex-col gap-4 animate-fade-in">
-          {/* Top KPI Metric Cards Grid */}
+        <div className="flex flex-col gap-3.5 animate-fade-in">
+          {/* Executive Top KPI Metric Cards Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-[11px] text-secondary font-semibold">Total Campaigns</span>
-              <span className="text-2xl font-bold text-on-surface tabular-nums mt-1">
+            {/* Card 1: Total Campaigns */}
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+              <div className="absolute top-0 inset-x-0 h-1 bg-slate-300 group-hover:bg-primary transition-colors" />
+              <div className="flex items-center justify-between text-secondary mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Total Campaigns</span>
+                <span className="material-symbols-outlined text-base text-secondary/70">campaign</span>
+              </div>
+              <span className="text-2xl lg:text-3xl font-extrabold text-on-surface font-mono tracking-tight my-1 tabular-nums">
                 {Number(metrics.totalCampaigns).toLocaleString()}
               </span>
-              <span className="text-[10px] text-emerald-600 font-medium mt-0.5">✓ 100% Data Quality Verified</span>
+              <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md w-fit border border-emerald-200">
+                <span>✓ 100% Quality Verified</span>
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-[11px] text-secondary font-semibold">Portfolio Average ROI</span>
-              <span className="text-2xl font-bold text-primary tabular-nums mt-1">
+            {/* Card 2: Portfolio Average ROI */}
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+              <div className="absolute top-0 inset-x-0 h-1 bg-primary" />
+              <div className="flex items-center justify-between text-secondary mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Portfolio Avg ROI</span>
+                <span className="material-symbols-outlined text-base text-primary">trending_up</span>
+              </div>
+              <span className="text-2xl lg:text-3xl font-extrabold text-primary font-mono tracking-tight my-1 tabular-nums">
                 {metrics.avgROI}x
               </span>
-              <span className="text-[10px] text-emerald-600 font-medium mt-0.5">+14% vs Baseline Benchmark</span>
+              <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md w-fit border border-emerald-200">
+                <span>▲ +14% vs Baseline Benchmark</span>
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-[11px] text-secondary font-semibold">Average Conversion Rate</span>
-              <span className="text-2xl font-bold text-emerald-600 tabular-nums mt-1">
+            {/* Card 3: Average Conversion Rate */}
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+              <div className="absolute top-0 inset-x-0 h-1 bg-emerald-500" />
+              <div className="flex items-center justify-between text-secondary mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Avg Conversion Rate</span>
+                <span className="material-symbols-outlined text-base text-emerald-600">conversion_path</span>
+              </div>
+              <span className="text-2xl lg:text-3xl font-extrabold text-emerald-600 font-mono tracking-tight my-1 tabular-nums">
                 {metrics.avgConvRate}%
               </span>
-              <span className="text-[10px] text-secondary font-medium mt-0.5">Enterprise Leads Leading</span>
+              <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-secondary bg-surface-container-low px-2 py-0.5 rounded-md w-fit border border-outline-variant/20">
+                <span>Enterprise Leads Leading</span>
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-[11px] text-secondary font-semibold">Average Acquisition Cost (CAC)</span>
-              <span className="text-2xl font-bold text-on-surface tabular-nums mt-1">
+            {/* Card 4: Acquisition Cost (CAC) */}
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+              <div className="absolute top-0 inset-x-0 h-1 bg-indigo-500" />
+              <div className="flex items-center justify-between text-secondary mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider">Avg Acquisition Cost (CAC)</span>
+                <span className="material-symbols-outlined text-base text-indigo-500">payments</span>
+              </div>
+              <span className="text-2xl lg:text-3xl font-extrabold text-on-surface font-mono tracking-tight my-1 tabular-nums">
                 ${metrics.avgCAC.toLocaleString()}
               </span>
-              <span className="text-[10px] text-secondary font-medium mt-0.5">Optimized Spend Profile</span>
+              <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-secondary bg-surface-container-low px-2 py-0.5 rounded-md w-fit border border-outline-variant/20">
+                <span>Optimized Spend Profile</span>
+              </div>
             </div>
           </div>
 
           {/* Page 1 Visuals Grid: Gauge + Funnel + Trend Curve */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
               <GaugeVisual title="ROI Performance Gauge" currentValue={metrics.avgROI} targetValue={5.0} />
             </div>
 
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
               <FunnelVisual title="Conversion Pipeline Funnel" />
             </div>
 
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
               <DurationTrendVisual title="Campaign Duration Efficiency" />
             </div>
           </div>

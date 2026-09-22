@@ -7,6 +7,8 @@ import PipelineStepper from './components/PipelineStepper';
 import PlanReviewer from './components/PlanReviewer';
 import GenerationResult from './components/GenerationResult';
 import AIChat from './components/AIChat';
+import DaxStudio from './components/DaxStudio';
+import DatasetComparator from './components/DatasetComparator';
 import ErrorBoundary from './components/ErrorBoundary';
 import {
   checkHealth,
@@ -169,6 +171,25 @@ export default function App() {
     });
   };
 
+  const handleAddMeasureToPlan = (measure) => {
+    setDashboardPlan((prevPlan) => {
+      if (!prevPlan) {
+        return {
+          title: 'AI Campaign Performance Dashboard',
+          dataset_name: uploadedFile?.name || 'Campaigns.csv',
+          measures: [measure],
+          pages: [],
+        };
+      }
+      const existingMeasures = prevPlan.measures || [];
+      const updated = existingMeasures.filter((m) => m.name !== measure.name);
+      return {
+        ...prevPlan,
+        measures: [...updated, measure],
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans">
       {/* Minimal Header */}
@@ -202,7 +223,7 @@ export default function App() {
         } ${
           currentStage === 7
             ? 'h-screen box-border pt-16 pb-3 px-3 md:px-5 overflow-hidden'
-            : currentStage === 2 || currentStage === 6 || currentStage === 4
+            : [2, 4, 6, 8, 9].includes(currentStage)
             ? 'pt-16 min-h-screen p-4 md:p-6'
             : 'pt-16 min-h-screen p-6 md:p-8'
         }`}
@@ -211,7 +232,7 @@ export default function App() {
           className={`w-full ${
             currentStage === 7
               ? 'h-full flex-1 flex flex-col overflow-hidden'
-              : currentStage === 2 || currentStage === 6 || currentStage === 4
+              : [2, 4, 6, 8, 9].includes(currentStage)
               ? 'w-full'
               : 'max-w-4xl mx-auto'
           }`}
@@ -247,6 +268,7 @@ export default function App() {
                 pipelineData={pipelineData}
                 datasetRows={datasetRows}
                 onProceedToPlan={handleProceedToPlan}
+                onOpenComparator={() => setCurrentStage(9)}
               />
             )}
 
@@ -266,6 +288,7 @@ export default function App() {
                 isGenerating={isGenerating}
                 datasetRows={datasetRows}
                 totalRecords={totalRecords}
+                onOpenDaxStudio={() => setCurrentStage(8)}
               />
             )}
 
@@ -292,7 +315,7 @@ export default function App() {
               />
             )}
 
-            {/* Step 7 (AI Analyst tab) */}
+            {/* Step 7: AI Analyst tab */}
             {currentStage === 7 && (
               <AIChat
                 datasetId={pipelineData?.dataset_id || 'active-dataset'}
@@ -303,6 +326,26 @@ export default function App() {
                 messages={chatMessages}
                 setMessages={setChatMessages}
                 onPinVisual={handlePinVisualToPlan}
+              />
+            )}
+
+            {/* Step 8: DAX Formula Studio */}
+            {currentStage === 8 && (
+              <DaxStudio
+                datasetId={pipelineData?.dataset_id}
+                availableColumns={pipelineData?.inspection?.columns || []}
+                dashboardPlan={dashboardPlan}
+                onAddMeasureToPlan={handleAddMeasureToPlan}
+                onClose={() => setCurrentStage(dashboardPlan ? 4 : 2)}
+              />
+            )}
+
+            {/* Step 9: Multi-Dataset Benchmarking & Comparison */}
+            {currentStage === 9 && (
+              <DatasetComparator
+                activeDatasetFile={uploadedFile}
+                activeDatasetName={uploadedFile?.name}
+                onClose={() => setCurrentStage(pipelineData ? 2 : 1)}
               />
             )}
           </ErrorBoundary>

@@ -71,6 +71,10 @@ def test_build_project_complete(tmp_path):
     assert os.path.exists(data_dir)
     assert len(os.listdir(data_dir)) == 1
 
+    # Check launcher scripts
+    assert os.path.exists(os.path.join(project_dir, "run_in_powerbi.bat"))
+    assert os.path.exists(os.path.join(project_dir, "launch_report.ps1"))
+
     # Check zip
     zip_path = result["zip_path"]
     assert os.path.exists(zip_path)
@@ -81,3 +85,6 @@ def test_build_project_complete(tmp_path):
         assert any("Marketing_Test_Proj.pbip" in n for n in names)
         assert any("report.json" in n for n in names)
         assert any("model.bim" in n for n in names)
+        assert any("run_in_powerbi.bat" in n for n in names)
+        assert any("launch_report.ps1" in n for n in names)
+

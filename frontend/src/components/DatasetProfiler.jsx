@@ -4,6 +4,7 @@ export default function DatasetProfiler({
   pipelineData,
   datasetRows = [],
   onProceedToPlan,
+  onOpenComparator,
 }) {
   const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'table'
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,15 +59,20 @@ export default function DatasetProfiler({
 
   const handleSort = (col) => {
     if (sortColumn === col) {
-      if (sortDirection === 'asc') setSortDirection('desc');
-      else {
-        setSortColumn(null);
-        setSortDirection('asc');
-      }
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortColumn(col);
       setSortDirection('asc');
     }
+  };
+
+  const inferColumnRole = (colName) => {
+    const lower = colName.toLowerCase();
+    if (lower.includes('id') || lower.includes('key')) return 'Identifier';
+    if (lower.includes('cost') || lower.includes('roi') || lower.includes('spend') || lower.includes('rate') || lower.includes('revenue') || lower.includes('duration')) {
+      return 'Numeric';
+    }
+    return 'Category';
   };
 
   const getCategoryTag = (colName, inferredType) => {
@@ -95,33 +101,47 @@ export default function DatasetProfiler({
             </p>
           </div>
 
-          {/* View Mode Toggle Tabs */}
-          <div className="flex items-center p-1 rounded-xl bg-surface-container-low border border-outline-variant/30">
-            <button
-              type="button"
-              onClick={() => setActiveTab('summary')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === 'summary'
-                  ? 'bg-surface-container-lowest text-primary shadow-sm'
-                  : 'text-secondary hover:text-on-surface'
-              }`}
-            >
-              Schema & Quality
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('table')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === 'table'
-                  ? 'bg-surface-container-lowest text-primary shadow-sm'
-                  : 'text-secondary hover:text-on-surface'
-              }`}
-            >
-              <span>View Dataset</span>
-              <span className="px-1.5 py-0.2 rounded-full bg-primary-fixed text-primary text-[10px] font-bold">
-                {displayRows.length}
-              </span>
-            </button>
+          <div className="flex items-center gap-2">
+            {onOpenComparator && (
+              <button
+                type="button"
+                onClick={onOpenComparator}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all flex items-center gap-1.5 shadow-xs"
+                title="Compare this dataset against another quarter/period"
+              >
+                <span className="material-symbols-outlined text-sm text-sky-600">compare_arrows</span>
+                <span>Compare / Benchmark</span>
+              </button>
+            )}
+
+            {/* View Mode Toggle Tabs */}
+            <div className="flex items-center p-1 rounded-xl bg-surface-container-low border border-outline-variant/30">
+              <button
+                type="button"
+                onClick={() => setActiveTab('summary')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === 'summary'
+                    ? 'bg-surface-container-lowest text-primary shadow-sm'
+                    : 'text-secondary hover:text-on-surface'
+                }`}
+              >
+                Schema & Quality
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('table')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'table'
+                    ? 'bg-surface-container-lowest text-primary shadow-sm'
+                    : 'text-secondary hover:text-on-surface'
+                }`}
+              >
+                <span>View Dataset</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-primary-fixed text-primary text-[10px] font-bold">
+                  {displayRows.length}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 

@@ -93,3 +93,45 @@ def test_api_powerbi_launch(client, registered_dataset):
     assert launch_resp.status_code == 200
     res_data = launch_resp.json()
     assert "success" in res_data
+
+    # Test launcher script downloads
+    bat_resp = client.get(f"/api/v1/powerbi/launcher/{artifact_id}?script_type=bat")
+    assert bat_resp.status_code == 200
+    assert b"Power BI Project One-Click Launcher" in bat_resp.content
+
+    ps1_resp = client.get(f"/api/v1/powerbi/launcher/{artifact_id}?script_type=ps1")
+    assert ps1_resp.status_code == 200
+    assert b"One-Click Power BI Desktop Launcher" in ps1_resp.content
+
+
+def test_api_powerbi_dax_endpoints(client, registered_dataset):
+    # Test templates
+    tmpl_resp = client.get("/api/v1/powerbi/dax/templates")
+    assert tmpl_resp.status_code == 200
+    templates = tmpl_resp.json()
+    assert len(templates) >= 6
+
+    # Test generate
+    gen_resp = client.post(
+        "/api/v1/powerbi/dax/generate",
+        json={
+            "prompt": "Calculate rolling 30-day average CAC",
+            "dataset_id": registered_dataset,
+        },
+    )
+    assert gen_resp.status_code == 200
+    gen_data = gen_resp.json()
+    assert "expression" in gen_data
+    assert gen_data["validation"]["is_valid"] is True
+
+    # Test validate
+    val_resp = client.post(
+        "/api/v1/powerbi/dax/validate",
+        json={
+            "expression": "AVERAGE('Campaigns'[ROI])",
+            "dataset_id": registered_dataset,
+        },
+    )
+    assert val_resp.status_code == 200
+    assert val_resp.json()["is_valid"] is True
+

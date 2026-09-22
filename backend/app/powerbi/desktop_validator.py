@@ -183,20 +183,38 @@ class PowerBIDesktopValidator:
                 }
 
         # If file association is registered on Windows, try os.startfile
-        if platform.system().lower() == "windows" and env.file_association_detected:
-            try:
-                os.startfile(os.path.abspath(pbip_file_path))  # type: ignore[attr-defined]
-                return {
-                    "success": True,
-                    "launched_with": "system_file_association",
-                    "target_file": pbip_file_path,
-                    "message": "Project opened via Windows default file handler.",
-                }
-            except Exception as e:
-                return {
-                    "success": False,
-                    "error": f"Failed to open via file association: {str(e)}",
-                }
+        if platform.system().lower() == "windows":
+            # Check for adjacent run_in_powerbi.bat first if available
+            parent_dir = os.path.dirname(os.path.abspath(pbip_file_path))
+            bat_path = os.path.join(parent_dir, "run_in_powerbi.bat")
+
+            if env.file_association_detected:
+                try:
+                    os.startfile(os.path.abspath(pbip_file_path))  # type: ignore[attr-defined]
+                    return {
+                        "success": True,
+                        "launched_with": "system_file_association",
+                        "target_file": pbip_file_path,
+                        "message": "Project opened via Windows default file handler.",
+                    }
+                except Exception as e:
+                    pass
+
+            # Fallback to executing the batch script
+            if os.path.isfile(bat_path):
+                try:
+                    subprocess.Popen(["cmd.exe", "/c", bat_path], cwd=parent_dir)
+                    return {
+                        "success": True,
+                        "launched_with": "run_in_powerbi.bat",
+                        "target_file": pbip_file_path,
+                        "message": "Project launched via one-click batch script.",
+                    }
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "error": f"Failed to execute batch launcher: {str(e)}",
+                    }
 
         return {
             "success": False,

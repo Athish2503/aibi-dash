@@ -16,9 +16,10 @@ from backend.app.data.validator import validate_dataset
 from backend.app.data.cleaner import clean_dataset
 from backend.app.data.profiler import profile_dataset
 from backend.app.data.loader import load_dataset_into_df
-from backend.app.data.storage import save_dataset
+from backend.app.data.storage import save_dataset, get_dataset
 from backend.app.agent.plan_schemas import DashboardPlan
 from backend.app.agent.dashboard_planner import DashboardPlanner
+from backend.app.analytics.comparator import DatasetComparator, DatasetComparisonResult
 
 router = APIRouter()
 
@@ -213,4 +214,75 @@ async def generate_dashboard_plan_for_dataset(
             status_code=HTTP_422,
             detail=f"Failed to generate dashboard plan: {str(e)}",
         )
+
+
+class CompareByIdRequest(BaseModel):
+    dataset_id_a: str
+    dataset_id_b: str
+    label_a: Optional[str] = "Baseline"
+    label_b: Optional[str] = "Comparison"
+
+
+@router.post("/compare", response_model=DatasetComparisonResult)
+async def compare_uploaded_datasets(
+    file_a: UploadFile = File(..., description="Baseline dataset (e.g. Q1 / Brand A)"),
+    file_b: UploadFile = File(..., description="Comparison dataset (e.g. Q2 / Brand B)"),
+    label_a: str = Query(default="Baseline"),
+    label_b: str = Query(default="Comparison"),
+):
+    """
+    Deterministically compares two uploaded marketing campaign datasets,
+    calculating exact metric variances, channel-by-channel performance shifts,
+    and executive highlight summaries.
+    """
+    content_a, fn_a = await _read_and_validate_upload(file_a)
+    content_b, fn_b = await _read_and_validate_upload(file_b)
+
+    try:
+        raw_a, _ = load_dataset_into_df(content_a, file_name=fn_a)
+        clean_a, _ = clean_dataset(raw_a)
+
+        raw_b, _ = load_dataset_into_df(content_b, file_name=fn_b)
+        clean_b, _ = clean_dataset(raw_b)
+
+        result = DatasetComparator.compare(
+            df_a=clean_a,
+            df_b=clean_b,
+            label_a=label_a or fn_a,
+            label_b=label_b or fn_b,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=HTTP_422,
+            detail=f"Failed to compare datasets: {str(e)}",
+        )
+
+
+@router.post("/compare-by-id", response_model=DatasetComparisonResult)
+async def compare_datasets_by_id(request: CompareByIdRequest):
+    """
+    Compares two registered datasets by their session dataset IDs.
+    """
+    df_a = get_dataset(request.dataset_id_a)
+    if df_a is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Baseline dataset '{request.dataset_id_a}' not found.",
+        )
+
+    df_b = get_dataset(request.dataset_id_b)
+    if df_b is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Comparison dataset '{request.dataset_id_b}' not found.",
+        )
+
+    return DatasetComparator.compare(
+        df_a=df_a,
+        df_b=df_b,
+        label_a=request.label_a or "Baseline",
+        label_b=request.label_b or "Comparison",
+    )
+
 

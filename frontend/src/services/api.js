@@ -169,3 +169,98 @@ export async function getExecutiveReport(datasetId, datasetName = 'Campaign Perf
 
   return await res.json();
 }
+
+// --- DAX Formula Studio Services ---
+
+export async function getDaxTemplates() {
+  const res = await fetch(`${API_BASE}/powerbi/dax/templates`);
+  if (!res.ok) throw new Error('Failed to fetch DAX templates');
+  return await res.json();
+}
+
+export async function generateDaxMeasure({ prompt, datasetId, tableName = 'Campaigns', customColumns = null }) {
+  const res = await fetch(`${API_BASE}/powerbi/dax/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      dataset_id: datasetId || undefined,
+      table_name: tableName,
+      custom_columns: customColumns || undefined,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to generate DAX measure');
+  }
+
+  return await res.json();
+}
+
+export async function validateDaxFormula({ expression, datasetId, tableName = 'Campaigns', availableColumns = null, availableMeasures = null }) {
+  const res = await fetch(`${API_BASE}/powerbi/dax/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      expression,
+      dataset_id: datasetId || undefined,
+      table_name: tableName,
+      available_columns: availableColumns || undefined,
+      available_measures: availableMeasures || undefined,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'DAX validation request failed');
+  }
+
+  return await res.json();
+}
+
+export function getLauncherScriptUrl(artifactId, scriptType = 'bat') {
+  return `${API_BASE}/powerbi/launcher/${artifactId}?script_type=${scriptType}`;
+}
+
+// --- Multi-Dataset Benchmarking & Cross-Comparison Services ---
+
+export async function compareUploadedDatasets(fileA, fileB, labelA = 'Baseline', labelB = 'Comparison') {
+  const formData = new FormData();
+  formData.append('file_a', fileA);
+  formData.append('file_b', fileB);
+
+  const params = new URLSearchParams({ label_a: labelA, label_b: labelB });
+  const res = await fetch(`${API_BASE}/dataset/compare?${params.toString()}`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to compare uploaded datasets');
+  }
+
+  return await res.json();
+}
+
+export async function compareDatasetsById({ datasetIdA, datasetIdB, labelA = 'Baseline', labelB = 'Comparison' }) {
+  const res = await fetch(`${API_BASE}/dataset/compare-by-id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      dataset_id_a: datasetIdA,
+      dataset_id_b: datasetIdB,
+      label_a: labelA,
+      label_b: labelB,
+    }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to compare datasets by ID');
+  }
+
+  return await res.json();
+}
+

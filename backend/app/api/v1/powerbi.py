@@ -30,12 +30,16 @@ from backend.app.powerbi.project_builder import ProjectBuilder
 from backend.app.powerbi.validator import PowerBIArtifactValidator
 from backend.app.powerbi.desktop_validator import PowerBIDesktopValidator
 from backend.app.powerbi.service_adapter import PowerBIServiceAdapter
+from backend.app.powerbi.dax_validator import DeterministicDAXValidator, DAXValidationResult
+from backend.app.powerbi.dax_copilot import DAXCoPilot, DAXCoPilotResult, DAXTemplate
 
 router = APIRouter()
 project_builder = ProjectBuilder()
 artifact_validator = PowerBIArtifactValidator()
 desktop_validator = PowerBIDesktopValidator()
 service_adapter = PowerBIServiceAdapter()
+dax_copilot = DAXCoPilot()
+dax_validator = DeterministicDAXValidator()
 
 
 class GeneratePowerBIRequest(BaseModel):
@@ -53,6 +57,21 @@ class ValidatePowerBIRequest(BaseModel):
 
 class LaunchPowerBIRequest(BaseModel):
     artifact_id: str = Field(description="ID of generated artifact to open in Power BI Desktop")
+
+
+class GenerateDAXRequest(BaseModel):
+    prompt: str = Field(description="Natural-language description of calculation requirement")
+    dataset_id: Optional[str] = Field(default=None, description="Optional dataset ID for schema column discovery")
+    table_name: Optional[str] = Field(default="Campaigns", description="Target table name")
+    custom_columns: Optional[list[str]] = Field(default=None, description="Explicit columns list")
+
+
+class ValidateDAXRequest(BaseModel):
+    expression: str = Field(description="DAX formula expression to validate")
+    dataset_id: Optional[str] = Field(default=None, description="Optional dataset ID for schema column discovery")
+    table_name: Optional[str] = Field(default="Campaigns", description="Target table name")
+    available_columns: Optional[list[str]] = Field(default=None, description="Explicit available columns list")
+    available_measures: Optional[list[str]] = Field(default=None, description="Explicit available measures list")
 
 
 @router.post("/generate", response_model=PowerBIGenerationResult)
@@ -250,3 +269,80 @@ async def refresh_service_dataset(request: RefreshRequest):
         dataset_id=request.dataset_id,
         workspace_id=request.workspace_id,
     )
+
+
+# --- DAX Formula Studio & Launcher Script Endpoints ---
+
+@router.get("/dax/templates", response_model=list[DAXTemplate])
+async def get_dax_templates():
+    """
+    Returns curated, production-grade marketing DAX templates for 1-click usage.
+    """
+    return dax_copilot.get_templates()
+
+
+@router.post("/dax/generate", response_model=DAXCoPilotResult)
+async def generate_dax_formula(request: GenerateDAXRequest):
+    """
+    Translates a plain-English metric description into a verified DAX expression.
+    """
+    cols = request.custom_columns
+    if not cols and request.dataset_id:
+        df = get_dataset(request.dataset_id)
+        if df is not None:
+            cols = list(df.columns)
+
+    return dax_copilot.generate_measure(
+        prompt=request.prompt,
+        table_name=request.table_name or "Campaigns",
+        available_columns=cols,
+    )
+
+
+@router.post("/dax/validate", response_model=DAXValidationResult)
+async def validate_dax_formula(request: ValidateDAXRequest):
+    """
+    Deterministically validates a DAX expression against syntax, function lists,
+    and dataset schema columns.
+    """
+    cols = request.available_columns
+    if not cols and request.dataset_id:
+        df = get_dataset(request.dataset_id)
+        if df is not None:
+            cols = list(df.columns)
+
+    return dax_validator.validate(
+        expression=request.expression,
+        table_name=request.table_name or "Campaigns",
+        available_columns=cols,
+        available_measures=request.available_measures,
+    )
+
+
+@router.get("/launcher/{artifact_id}")
+async def download_launcher_script(artifact_id: str, script_type: str = Query(default="bat")):
+    """
+    Downloads either 'run_in_powerbi.bat' or 'launch_report.ps1' directly for an artifact.
+    """
+    artifact_root = os.path.join(str(settings.GENERATED_DIR), artifact_id)
+    if not os.path.isdir(artifact_root):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact with ID '{artifact_id}' not found.",
+        )
+
+    target_name = "launch_report.ps1" if script_type.lower() == "ps1" else "run_in_powerbi.bat"
+    matches = glob.glob(os.path.join(artifact_root, "**", target_name), recursive=True)
+    if not matches:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Launcher script '{target_name}' not found for artifact '{artifact_id}'.",
+        )
+
+    media_type = "text/plain"
+    return FileResponse(
+        path=matches[0],
+        media_type=media_type,
+        filename=target_name,
+    )
+

@@ -15,6 +15,8 @@ export default function Sidebar({
     { id: 4, label: 'Generate', icon: 'settings', unlocked: hasDataset },
     { id: 6, label: 'Dashboard', icon: 'bar_chart', unlocked: hasArtifacts || hasPlan },
     { id: 7, label: 'AI Analyst', icon: 'smart_toy', unlocked: hasDataset },
+    { id: 8, label: 'DAX Studio', icon: 'functions', unlocked: hasDataset },
+    { id: 9, label: 'Benchmark', icon: 'compare_arrows', unlocked: true },
   ];
 
   return (
