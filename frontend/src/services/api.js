@@ -136,11 +136,15 @@ export async function publishToService({ artifactId, workspaceId, targetReportNa
   return await res.json();
 }
 
-export async function sendChatMessage(datasetId, question) {
+export async function sendChatMessage(datasetId, question, conversationHistory = []) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dataset_id: datasetId, question }),
+    body: JSON.stringify({
+      dataset_id: datasetId,
+      question,
+      conversation_history: conversationHistory,
+    }),
   });
 
   if (!res.ok) {

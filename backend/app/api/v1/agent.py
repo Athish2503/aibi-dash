@@ -30,6 +30,7 @@ orchestrator = AgentOrchestrator()
 class ChatRequest(BaseModel):
     dataset_id: str = Field(description="Identifier of the dataset previously uploaded")
     question: str = Field(description="Natural language question to ask about the dataset")
+    conversation_history: list[dict[str, Any]] = Field(default_factory=list, description="Prior conversation messages for multi-turn context")
 
 
 class ChatResponse(BaseModel):
@@ -37,6 +38,9 @@ class ChatResponse(BaseModel):
     evidence: list[Any]
     tools_used: list[str]
     filters_applied: dict[str, Any] = Field(default_factory=dict)
+    visual_spec: Optional[dict[str, Any]] = Field(default=None, description="Structured Recharts visualization spec")
+    steps: list[dict[str, str]] = Field(default_factory=list, description="ReAct execution transparency trace")
+    follow_ups: list[str] = Field(default_factory=list, description="Contextual dynamic follow-up prompts")
 
 
 class DatasetIdRequest(BaseModel):
@@ -64,12 +68,19 @@ async def chat_with_dataset(request: ChatRequest):
         )
 
     try:
-        result = orchestrator.answer_natural_language_query(request.question, df)
+        result = orchestrator.answer_natural_language_query(
+            request.question,
+            df,
+            conversation_history=request.conversation_history,
+        )
         return ChatResponse(
             answer=result.answer,
             evidence=result.evidence,
             tools_used=result.tools_used,
             filters_applied=result.filters_applied,
+            visual_spec=result.visual_spec,
+            steps=result.steps,
+            follow_ups=result.follow_ups,
         )
     except Exception as e:
         raise HTTPException(

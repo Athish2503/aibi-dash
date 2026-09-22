@@ -123,6 +123,52 @@ export default function App() {
     pipelineData?.inspection?.row_count ??
     (datasetRows?.length > 0 ? datasetRows.length : 200000);
 
+  const handlePinVisualToPlan = (visual) => {
+    setDashboardPlan((prevPlan) => {
+      if (!prevPlan) {
+        return {
+          title: "AI Campaign Performance Dashboard",
+          theme: "Executive Blue",
+          pages: [
+            {
+              page_name: "AI Insights",
+              visualizations: [
+                {
+                  id: `pin_${Date.now()}`,
+                  title: visual.title,
+                  type: visual.type === 'donut' ? 'pie' : visual.type,
+                  metric: visual.metric || "ROI",
+                  rationale: "Discovered and pinned via AI Chat Agent",
+                  x_axis: "Channel / Dimension",
+                  y_axis: visual.metric || "ROI",
+                },
+              ],
+            },
+          ],
+        };
+      }
+      const pages = [...(prevPlan.pages || [])];
+      if (pages.length === 0) {
+        pages.push({ page_name: "Overview", visualizations: [] });
+      }
+      const firstPage = { ...pages[0] };
+      firstPage.visualizations = [
+        ...(firstPage.visualizations || []),
+        {
+          id: `pin_${Date.now()}`,
+          title: visual.title,
+          type: visual.type === 'donut' ? 'pie' : visual.type,
+          metric: visual.metric || "ROI",
+          rationale: "Discovered and pinned via AI Chat Agent",
+          x_axis: "Channel / Dimension",
+          y_axis: visual.metric || "ROI",
+        },
+      ];
+      pages[0] = firstPage;
+      return { ...prevPlan, pages };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans">
       {/* Minimal Header */}
@@ -256,6 +302,7 @@ export default function App() {
                 totalRecords={totalRecords}
                 messages={chatMessages}
                 setMessages={setChatMessages}
+                onPinVisual={handlePinVisualToPlan}
               />
             )}
           </ErrorBoundary>

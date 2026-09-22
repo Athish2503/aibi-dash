@@ -25,6 +25,7 @@ def test_chat_endpoint_success(active_dataset_id):
     payload = {
         "dataset_id": active_dataset_id,
         "question": "Which channel had the best ROI for 30-day campaigns?",
+        "conversation_history": [],
     }
     response = client.post("/api/v1/chat", json=payload)
     assert response.status_code == 200
@@ -36,6 +37,27 @@ def test_chat_endpoint_success(active_dataset_id):
     assert "analyze_channels" in data["tools_used"]
     assert len(data["evidence"]) > 0
     assert "Google Ads" in data["answer"]
+    assert "visual_spec" in data and data["visual_spec"] is not None
+    assert data["visual_spec"]["type"] == "bar"
+    assert "steps" in data and len(data["steps"]) >= 3
+    assert "follow_ups" in data and len(data["follow_ups"]) >= 2
+
+
+def test_chat_endpoint_multi_turn(active_dataset_id):
+    # Pass prior turn in conversation_history and ask pronoun question
+    history = [
+        {"role": "user", "text": "Which channel has the highest ROI?"},
+        {"role": "assistant", "text": "Google Ads achieved 3.03x ROI."},
+    ]
+    payload = {
+        "dataset_id": active_dataset_id,
+        "question": "What about its CAC?",
+        "conversation_history": history,
+    }
+    response = client.post("/api/v1/chat", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filters_applied"].get("Channel_Used") == "Google Ads"
 
 
 def test_chat_endpoint_dataset_not_found():

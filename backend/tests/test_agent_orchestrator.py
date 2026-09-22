@@ -113,3 +113,28 @@ def test_generate_executive_report(sample_df):
     assert report.kpis["total_campaigns"] == 10
     assert len(report.key_insights) > 0
     assert len(report.recommendations) > 0
+
+
+def test_visual_spec_and_steps_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Which channel had the best ROI?", sample_df)
+
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "bar"
+    assert response.visual_spec["x_key"] == "name"
+    assert len(response.visual_spec["data"]) > 0
+    assert len(response.steps) >= 3
+    assert any(s["step"] == "Intent & Context Classification" for s in response.steps)
+    assert len(response.follow_ups) >= 2
+
+
+def test_multi_turn_context_resolution(sample_df):
+    orchestrator = AgentOrchestrator()
+    history = [
+        {"role": "user", "text": "Which channel has the best ROI?"},
+        {"role": "assistant", "text": "Google Ads delivered the highest average return at 3.03x ROI across 3 campaigns."},
+    ]
+    # Follow-up query asking about CAC without repeating channel name
+    intent = orchestrator.parse_intent("What about its CAC?", conversation_history=history)
+    assert intent.filters.get("Channel_Used") == "Google Ads"
+    assert intent.metric == "Acquisition_Cost"
