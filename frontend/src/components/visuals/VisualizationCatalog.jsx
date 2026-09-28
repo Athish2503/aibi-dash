@@ -11,6 +11,7 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
+import AnimatedNumber from '../AnimatedNumber';
 
 /**
  * 1. Target Progress Gauge
@@ -74,7 +75,7 @@ export function GaugeVisual({
             strokeDasharray={arcLength}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-1000 ease-out"
           />
 
           {/* Target Benchmark Tick Mark */}
@@ -84,7 +85,7 @@ export function GaugeVisual({
         {/* Value Overlay */}
         <div className="absolute bottom-1 flex flex-col items-center">
           <div className="text-2xl font-extrabold text-on-surface tracking-tight tabular-nums">
-            {currentValue}{unit}
+            <AnimatedNumber value={currentValue} decimals={2} suffix={unit} duration={750} />
           </div>
           <span
             className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
@@ -162,8 +163,8 @@ export function FunnelVisual({
 
               <div className="w-full h-3.5 bg-surface-container-low rounded-md overflow-hidden flex items-center p-0.5 border border-outline-variant/20">
                 <div
-                  className="h-full rounded-sm bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 transition-all duration-500 shadow-xs"
-                  style={{ width: `${widthPct}%` }}
+                  className="h-full rounded-sm bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 transition-all duration-700 ease-out shadow-xs"
+                  style={{ width: `${widthPct}%`, transitionDelay: `${idx * 110}ms` }}
                 ></div>
               </div>
             </div>
@@ -207,7 +208,7 @@ export function TreemapVisual({
     <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/25 flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold text-on-surface">{title}</span>
-        <span className="text-[10px] text-secondary">Proportional Allocation</span>
+        <span className="text-[10px] text-secondary font-mono">Proportional Allocation</span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 min-h-[140px]">
@@ -220,7 +221,8 @@ export function TreemapVisual({
           return (
             <div
               key={idx}
-              className={`p-3 rounded-xl text-white flex flex-col justify-between shadow-xs transition-transform hover:scale-[1.02] ${colorClass}`}
+              style={{ animationDelay: `${idx * 75}ms` }}
+              className={`p-3 rounded-xl text-white flex flex-col justify-between shadow-xs transition-all duration-200 hover:scale-[1.02] hover:shadow-md animate-dashboard-card ${colorClass}`}
             >
               <div className="flex flex-col">
                 <span className="text-[11px] font-bold truncate">{item?.name || 'Category'}</span>
@@ -283,8 +285,29 @@ export function ComboChartVisual({
               ]}
               contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '11px', border: '1px solid #cbd5e1' }}
             />
-            <Bar yAxisId="left" dataKey="spend" name="Spend" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
-            <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} />
+            <Bar
+              yAxisId="left"
+              dataKey="spend"
+              name="Spend"
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={40}
+              isAnimationActive={true}
+              animationDuration={850}
+              animationEasing="ease-out"
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="roi"
+              name="ROI"
+              stroke="#f59e0b"
+              strokeWidth={3}
+              dot={{ r: 4 }}
+              isAnimationActive={true}
+              animationDuration={1200}
+              animationEasing="ease-out"
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -506,7 +529,7 @@ export function AnomalyDetectionVisual({
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                   item.severity === 'High'
-                    ? 'bg-red-50 text-red-700 border border-red-200'
+                    ? 'bg-red-50 text-red-700 border border-red-200 animate-radar'
                     : item.severity === 'Medium'
                     ? 'bg-amber-50 text-amber-700 border border-amber-200'
                     : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -522,9 +545,6 @@ export function AnomalyDetectionVisual({
   );
 }
 
-/**
- * 8. Area Chart for Duration Trends
- */
 /**
  * 8. Area Chart for Duration Trends
  */
@@ -581,6 +601,9 @@ export function DurationTrendVisual({
               strokeWidth={3}
               fillOpacity={1}
               fill="url(#roiGradientExecutive)"
+              isAnimationActive={true}
+              animationDuration={1100}
+              animationEasing="ease-out"
             />
           </AreaChart>
         </ResponsiveContainer>

@@ -169,3 +169,21 @@ class PowerBIGenerationResult(BaseModel):
     files_created: list[str] = Field(default_factory=list)
     validation: PowerBIValidationResult
     desktop_status: DesktopEnvironmentStatus
+
+
+class BISolutionResult(BaseModel):
+    """Unified synchronized BI Solution result containing both Web and Power BI targets."""
+    solution_id: str
+    artifact_id: str
+    spec_id: str
+    project_name: str
+    output_dir: str
+    pbip_path: str
+    zip_path: Optional[str] = None
+    web_spec: dict[str, Any]
+    manifest: dict[str, Any]
+    files_created: list[str] = Field(default_factory=list)
+    validation: PowerBIValidationResult
+    desktop_status: DesktopEnvironmentStatus
+    synchronized_at: str
+

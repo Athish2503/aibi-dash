@@ -18,6 +18,7 @@ from backend.app.powerbi.schemas import (
     PowerBIGenerationResult,
     PowerBIValidationResult,
     DesktopEnvironmentStatus,
+    BISolutionResult,
 )
 from backend.app.powerbi.service_schemas import (
     PublishRequest,
@@ -32,14 +33,17 @@ from backend.app.powerbi.desktop_validator import PowerBIDesktopValidator
 from backend.app.powerbi.service_adapter import PowerBIServiceAdapter
 from backend.app.powerbi.dax_validator import DeterministicDAXValidator, DAXValidationResult
 from backend.app.powerbi.dax_copilot import DAXCoPilot, DAXCoPilotResult, DAXTemplate
+from backend.app.dashboard.solution_builder import BISolutionBuilder
 
 router = APIRouter()
 project_builder = ProjectBuilder()
+bi_solution_builder = BISolutionBuilder()
 artifact_validator = PowerBIArtifactValidator()
 desktop_validator = PowerBIDesktopValidator()
 service_adapter = PowerBIServiceAdapter()
 dax_copilot = DAXCoPilot()
 dax_validator = DeterministicDAXValidator()
+
 
 
 class GeneratePowerBIRequest(BaseModel):
@@ -140,6 +144,77 @@ async def generate_powerbi_project(request: GeneratePowerBIRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate Power BI project: {str(e)}",
         )
+
+
+@router.post("/build-solution", response_model=BISolutionResult)
+async def build_bi_solution_endpoint(request: GeneratePowerBIRequest):
+    """
+    Builds a complete, synchronized BI Solution consisting of:
+    - Web Dashboard runtime specification (IR)
+    - Native Power BI Project (.pbip) bundle + TMDL + PBIR + DAX measures
+    - Grounded deterministic analytics snapshot (KPIs, Segments, Anomalies)
+    - Metadata and validation report
+    """
+    df = get_dataset(request.dataset_id)
+    if df is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset with ID '{request.dataset_id}' not found.",
+        )
+
+    meta = get_dataset_metadata(request.dataset_id) or {}
+    dataset_name = meta.get("filename", "Campaign_Data.csv")
+
+    try:
+        profile = profile_dataset(df)
+        if request.plan:
+            plan = request.plan
+        else:
+            planner = DashboardPlanner()
+            if request.ai_assisted:
+                plan = planner.plan_with_ai(
+                    dataset_name=dataset_name,
+                    columns=list(df.columns),
+                    profile=profile,
+                    user_prompt=request.prompt,
+                )
+            else:
+                plan = planner.generate_deterministic_plan(
+                    dataset_name=dataset_name,
+                    columns=list(df.columns),
+                    profile=profile,
+                )
+
+        sol_result = bi_solution_builder.build_solution(
+            spec_or_plan=plan,
+            df=df,
+            dataset_id=request.dataset_id,
+            dataset_filename=dataset_name,
+            custom_project_name=request.custom_project_name,
+            profile=profile,
+        )
+
+        return BISolutionResult(
+            solution_id=sol_result["solution_id"],
+            artifact_id=sol_result["artifact_id"],
+            spec_id=sol_result["spec_id"],
+            project_name=sol_result["project_name"],
+            output_dir=sol_result["artifact_dir"],
+            pbip_path=sol_result["pbip_path"],
+            zip_path=sol_result["zip_path"],
+            web_spec=sol_result["web_spec"],
+            manifest=sol_result["manifest"],
+            files_created=sol_result["files_created"],
+            validation=sol_result["validation"],
+            desktop_status=sol_result["desktop_status"],
+            synchronized_at=sol_result["synchronized_at"],
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to build BI solution: {str(e)}",
+        )
+
 
 
 @router.post("/validate", response_model=PowerBIValidationResult)

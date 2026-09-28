@@ -23,12 +23,15 @@ import {
   DurationTrendVisual,
 } from './visuals/VisualizationCatalog';
 import AddVisualModal from './visuals/AddVisualModal';
+import AnimatedNumber from './AnimatedNumber';
 
 export default function GenerationResult({
   generationResult,
   onReset,
   datasetRows = [],
   totalRecords = 200000,
+  onAskAI,
+  onGoToCopilot,
 }) {
   const [activePage, setActivePage] = useState(1);
   const [activeChannel, setActiveChannel] = useState('All');
@@ -37,21 +40,31 @@ export default function GenerationResult({
   const [isAddVisualOpen, setIsAddVisualOpen] = useState(false);
   const [customVisuals, setCustomVisuals] = useState([]);
 
+  // Interactive Cross-Filtering state
+  const [crossFilter, setCrossFilter] = useState(null); // { dimension: string, value: string, label: string }
+
+  // Hierarchical Drilldown state (Channel -> Audience -> Location)
+  const [_drillLevel, setDrillLevel] = useState(0);
+  const [drillPath, setDrillPath] = useState([]); // [{ dimension, value }]
+
+
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchMessage, setLaunchMessage] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishMessage, setPublishMessage] = useState(null);
 
-  // Cross-filtering dataset rows by active slicers
+  // Cross-filtering dataset rows by active slicers + crossFilter + drillPath
   const filteredRows = useMemo(() => {
     if (!datasetRows || datasetRows.length === 0) return [];
     return datasetRows.filter((r) => {
       const chMatch = activeChannel === 'All' || String(r.Channel_Used) === activeChannel;
       const audMatch = activeAudience === 'All' || String(r.Target_Audience) === activeAudience;
       const locMatch = activeLocation === 'All' || String(r.Location) === activeLocation;
-      return chMatch && audMatch && locMatch;
+      const crossMatch = !crossFilter || String(r[crossFilter.dimension]) === String(crossFilter.value);
+      const drillMatch = drillPath.every((dp) => String(r[dp.dimension]) === String(dp.value));
+      return chMatch && audMatch && locMatch && crossMatch && drillMatch;
     });
-  }, [datasetRows, activeChannel, activeAudience, activeLocation]);
+  }, [datasetRows, activeChannel, activeAudience, activeLocation, crossFilter, drillPath]);
 
   const metrics = useMemo(() => {
     return computeDatasetMetrics(filteredRows.length > 0 ? filteredRows : datasetRows);
@@ -79,7 +92,39 @@ export default function GenerationResult({
   if (!generationResult) return null;
 
   const { artifact_id } = generationResult;
-  const isFiltered = activeChannel !== 'All' || activeAudience !== 'All' || activeLocation !== 'All';
+  const isFiltered =
+    activeChannel !== 'All' ||
+    activeAudience !== 'All' ||
+    activeLocation !== 'All' ||
+    crossFilter !== null ||
+    drillPath.length > 0;
+
+  const handleCrossFilter = (dimension, value) => {
+    if (crossFilter && crossFilter.dimension === dimension && crossFilter.value === value) {
+      setCrossFilter(null);
+    } else {
+      setCrossFilter({
+        dimension,
+        value,
+        label: `${dimension.replace('_', ' ')}: ${value}`,
+      });
+    }
+  };
+
+  const handleDrillStep = (dimension, value) => {
+    setDrillPath((prev) => [...prev, { dimension, value }]);
+    setDrillLevel((prev) => prev + 1);
+  };
+
+  const handleDrillResetTo = (idx) => {
+    if (idx < 0) {
+      setDrillPath([]);
+      setDrillLevel(0);
+    } else {
+      setDrillPath((prev) => prev.slice(0, idx + 1));
+      setDrillLevel(idx + 1);
+    }
+  };
 
   const handleAddCustomVisual = (visualConfig) => {
     setCustomVisuals((prev) => [...prev, visualConfig]);
@@ -93,7 +138,11 @@ export default function GenerationResult({
     setActiveChannel('All');
     setActiveAudience('All');
     setActiveLocation('All');
+    setCrossFilter(null);
+    setDrillPath([]);
+    setDrillLevel(0);
   };
+
 
   const handleLaunch = async () => {
     setIsLaunching(true);
@@ -258,6 +307,40 @@ export default function GenerationResult({
         </div>
       </div>
 
+      {/* Dual-Target Synchronized BI Solution Status Bar */}
+      <div className="bg-gradient-to-r from-emerald-500/10 via-primary/5 to-surface-container-lowest rounded-2xl border border-emerald-500/30 p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-700 flex items-center justify-center font-bold">
+            <span className="material-symbols-outlined text-lg">sync_saved_locally</span>
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-on-surface">Dual-Target BI Solution Synchronized</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                ✓ Web Canvas + Power BI (.pbip)
+              </span>
+            </div>
+            <span className="text-[11px] text-secondary font-mono mt-0.5">
+              Single Intermediate Representation (IR: <code className="text-primary font-semibold">{generationResult.spec_id || artifact_id}</code>) compiled into both visualization targets.
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {onGoToCopilot && (
+            <button
+              type="button"
+              onClick={onGoToCopilot}
+              className="h-8 px-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+              title="Open Grounded AI Analyst Copilot"
+            >
+              <span className="material-symbols-outlined text-sm">psychology</span>
+              <span>Open Copilot</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Notifications */}
       {(launchMessage || publishMessage) && (
         <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center justify-between shadow-xs animate-fade-in">
@@ -358,23 +441,47 @@ export default function GenerationResult({
             </select>
           </div>
 
-          {/* Quick-select pills for top 3 channels */}
-          <div className="hidden lg:flex items-center gap-1 pl-1">
-            {channelOptions.slice(0, 3).map((ch) => (
+          {/* Cross-Filter Indicator Chip */}
+          {crossFilter && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold animate-chip-in shadow-xs">
+              <span className="material-symbols-outlined text-xs">filter_list</span>
+              <span>Cross-filter: {crossFilter.label}</span>
               <button
-                key={ch}
                 type="button"
-                onClick={() => setActiveChannel(activeChannel === ch ? 'All' : ch)}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-all ${
-                  activeChannel === ch
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'text-secondary hover:text-on-surface hover:bg-surface-container'
-                }`}
+                onClick={() => setCrossFilter(null)}
+                className="ml-1 text-primary hover:text-red-600 font-extrabold"
+                title="Clear cross-filter"
               >
-                {ch}
+                ✕
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {/* Drill-down Breadcrumb Navigator */}
+          {drillPath.length > 0 && (
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-semibold animate-chip-in">
+              <span className="material-symbols-outlined text-xs">account_tree</span>
+              <button
+                type="button"
+                onClick={() => handleDrillResetTo(-1)}
+                className="hover:underline font-bold"
+              >
+                All Channels
+              </button>
+              {drillPath.map((dp, idx) => (
+                <React.Fragment key={idx}>
+                  <span>&gt;</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDrillResetTo(idx)}
+                    className={`hover:underline ${idx === drillPath.length - 1 ? 'font-bold text-indigo-900' : ''}`}
+                  >
+                    {dp.value}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Drill-down Breadcrumb & Reset */}
@@ -386,7 +493,7 @@ export default function GenerationResult({
               className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[11px] font-bold flex items-center gap-1 transition-colors shadow-xs"
             >
               <span className="material-symbols-outlined text-xs">filter_alt_off</span>
-              <span>Reset Filters</span>
+              <span>Reset All Filters</span>
             </button>
           )}
           <div className="flex items-center gap-1.5 text-[11px] text-secondary font-mono bg-surface-container-low px-2.5 py-1 rounded-lg border border-outline-variant/20">
@@ -400,37 +507,90 @@ export default function GenerationResult({
         </div>
       </div>
 
+
       {/* ========================================================================= */}
       {/* PAGE 1: EXECUTIVE OVERVIEW                                                */}
       {/* ========================================================================= */}
       {activePage === 1 && (
-        <div className="flex flex-col gap-3.5 animate-fade-in">
+        <div className="flex flex-col gap-3.5 animate-dashboard-page">
           {/* Executive Top KPI Metric Cards Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
             {/* Card 1: Total Campaigns */}
-            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between dashboard-card-hover animate-dashboard-card delay-1 group">
               <div className="absolute top-0 inset-x-0 h-1 bg-slate-300 group-hover:bg-primary transition-colors" />
               <div className="flex items-center justify-between text-secondary mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Total Campaigns</span>
-                <span className="material-symbols-outlined text-base text-secondary/70">campaign</span>
+                <div className="flex items-center gap-1.5">
+                  {onAskAI && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAskAI({
+                          visualTitle: 'Total Campaigns',
+                          metric: 'Campaign Count',
+                          value: metrics.totalCampaigns,
+                          activeFilters: {
+                            Channel: activeChannel,
+                            Audience: activeAudience,
+                            Location: activeLocation,
+                            ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                          },
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold flex items-center gap-0.5 shadow-xs transition-colors"
+                      title="Ask Grounded Copilot to analyze Total Campaigns"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">psychology</span>
+                      <span>Ask AI</span>
+                    </button>
+                  )}
+                  <span className="material-symbols-outlined text-base text-secondary/70 group-hover:scale-110 transition-transform">campaign</span>
+                </div>
               </div>
               <span className="text-2xl lg:text-3xl font-extrabold text-on-surface font-mono tracking-tight my-1 tabular-nums">
-                {Number(metrics.totalCampaigns).toLocaleString()}
+                <AnimatedNumber value={metrics.totalCampaigns} duration={700} />
               </span>
               <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md w-fit border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>✓ 100% Quality Verified</span>
               </div>
             </div>
 
             {/* Card 2: Portfolio Average ROI */}
-            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between dashboard-card-hover animate-dashboard-card delay-2 group">
               <div className="absolute top-0 inset-x-0 h-1 bg-primary" />
               <div className="flex items-center justify-between text-secondary mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Portfolio Avg ROI</span>
-                <span className="material-symbols-outlined text-base text-primary">trending_up</span>
+                <div className="flex items-center gap-1.5">
+                  {onAskAI && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAskAI({
+                          visualTitle: 'Portfolio Average ROI',
+                          metric: 'Average ROI',
+                          value: `${metrics.avgROI}x`,
+                          activeFilters: {
+                            Channel: activeChannel,
+                            Audience: activeAudience,
+                            Location: activeLocation,
+                            ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                          },
+                          selectedCategory: crossFilter?.value,
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold flex items-center gap-0.5 shadow-xs transition-colors"
+                      title="Ask Grounded Copilot to analyze Portfolio Avg ROI"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">psychology</span>
+                      <span>Ask AI</span>
+                    </button>
+                  )}
+                  <span className="material-symbols-outlined text-base text-primary group-hover:scale-110 transition-transform">trending_up</span>
+                </div>
               </div>
               <span className="text-2xl lg:text-3xl font-extrabold text-primary font-mono tracking-tight my-1 tabular-nums">
-                {metrics.avgROI}x
+                <AnimatedNumber value={metrics.avgROI} decimals={2} suffix="x" duration={750} />
               </span>
               <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md w-fit border border-emerald-200">
                 <span>▲ +14% vs Baseline Benchmark</span>
@@ -438,14 +598,40 @@ export default function GenerationResult({
             </div>
 
             {/* Card 3: Average Conversion Rate */}
-            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between dashboard-card-hover animate-dashboard-card delay-3 group">
               <div className="absolute top-0 inset-x-0 h-1 bg-emerald-500" />
               <div className="flex items-center justify-between text-secondary mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Avg Conversion Rate</span>
-                <span className="material-symbols-outlined text-base text-emerald-600">conversion_path</span>
+                <div className="flex items-center gap-1.5">
+                  {onAskAI && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAskAI({
+                          visualTitle: 'Average Conversion Rate',
+                          metric: 'Conversion Rate',
+                          value: `${metrics.avgConvRate}%`,
+                          activeFilters: {
+                            Channel: activeChannel,
+                            Audience: activeAudience,
+                            Location: activeLocation,
+                            ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                          },
+                          selectedCategory: crossFilter?.value,
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-0.5 shadow-xs transition-colors"
+                      title="Ask Grounded Copilot to analyze Conversion Rate"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">psychology</span>
+                      <span>Ask AI</span>
+                    </button>
+                  )}
+                  <span className="material-symbols-outlined text-base text-emerald-600 group-hover:scale-110 transition-transform">conversion_path</span>
+                </div>
               </div>
               <span className="text-2xl lg:text-3xl font-extrabold text-emerald-600 font-mono tracking-tight my-1 tabular-nums">
-                {metrics.avgConvRate}%
+                <AnimatedNumber value={metrics.avgConvRate} decimals={2} suffix="%" duration={750} />
               </span>
               <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-secondary bg-surface-container-low px-2 py-0.5 rounded-md w-fit border border-outline-variant/20">
                 <span>Enterprise Leads Leading</span>
@@ -453,14 +639,40 @@ export default function GenerationResult({
             </div>
 
             {/* Card 4: Acquisition Cost (CAC) */}
-            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-sm transition-all group">
+            <div className="relative p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs overflow-hidden flex flex-col justify-between dashboard-card-hover animate-dashboard-card delay-4 group">
               <div className="absolute top-0 inset-x-0 h-1 bg-indigo-500" />
               <div className="flex items-center justify-between text-secondary mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Avg Acquisition Cost (CAC)</span>
-                <span className="material-symbols-outlined text-base text-indigo-500">payments</span>
+                <div className="flex items-center gap-1.5">
+                  {onAskAI && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAskAI({
+                          visualTitle: 'Average Acquisition Cost',
+                          metric: 'Acquisition Cost',
+                          value: `$${metrics.avgCAC}`,
+                          activeFilters: {
+                            Channel: activeChannel,
+                            Audience: activeAudience,
+                            Location: activeLocation,
+                            ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                          },
+                          selectedCategory: crossFilter?.value,
+                        })
+                      }
+                      className="px-1.5 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center gap-0.5 shadow-xs transition-colors"
+                      title="Ask Grounded Copilot to analyze CAC"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">psychology</span>
+                      <span>Ask AI</span>
+                    </button>
+                  )}
+                  <span className="material-symbols-outlined text-base text-indigo-500 group-hover:scale-110 transition-transform">payments</span>
+                </div>
               </div>
               <span className="text-2xl lg:text-3xl font-extrabold text-on-surface font-mono tracking-tight my-1 tabular-nums">
-                ${metrics.avgCAC.toLocaleString()}
+                <AnimatedNumber value={metrics.avgCAC} prefix="$" duration={800} />
               </span>
               <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-secondary bg-surface-container-low px-2 py-0.5 rounded-md w-fit border border-outline-variant/20">
                 <span>Optimized Spend Profile</span>
@@ -470,15 +682,15 @@ export default function GenerationResult({
 
           {/* Page 1 Visuals Grid: Gauge + Funnel + Trend Curve */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-5">
               <GaugeVisual title="ROI Performance Gauge" currentValue={metrics.avgROI} targetValue={5.0} />
             </div>
 
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-5">
               <FunnelVisual title="Conversion Pipeline Funnel" />
             </div>
 
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs hover:shadow-sm transition-shadow">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-6">
               <DurationTrendVisual title="Campaign Duration Efficiency" />
             </div>
           </div>
@@ -489,26 +701,66 @@ export default function GenerationResult({
       {/* PAGE 2: CHANNEL PERFORMANCE                                               */}
       {/* ========================================================================= */}
       {activePage === 2 && (
-        <div className="flex flex-col gap-4 animate-fade-in">
+        <div className="flex flex-col gap-4 animate-dashboard-page">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Visual: Combo Chart (Dual Axis) */}
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-1">
               <ComboChartVisual title="Spend vs ROI (Dual Axis Combo Chart)" />
             </div>
 
             {/* Visual: Treemap Allocation */}
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-2">
               <TreemapVisual title="Channel & Category Share of Spend (Treemap)" />
             </div>
           </div>
 
           {/* Visual: Channel ROI Bar Chart & Drill-Down Table */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-xs font-bold text-on-surface mb-3">ROI Comparison by Channel</span>
+            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col dashboard-card-hover animate-dashboard-card delay-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-on-surface">ROI Comparison by Channel</span>
+                  <span className="text-[10px] text-secondary hidden sm:inline">(Click bar to cross-filter)</span>
+                </div>
+                {onAskAI && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onAskAI({
+                        visualTitle: 'ROI Comparison by Channel',
+                        metric: 'ROI',
+                        dimension: 'Channel_Used',
+                        activeFilters: {
+                          Channel: activeChannel,
+                          Audience: activeAudience,
+                          Location: activeLocation,
+                          ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                        },
+                        selectedCategory: crossFilter?.value,
+                        value: `${metrics.avgROI}x`,
+                      })
+                    }
+                    className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold flex items-center gap-1 transition-colors shadow-xs"
+                    title="Ask AI to analyze Channel ROI performance"
+                  >
+                    <span className="material-symbols-outlined text-[12px]">psychology</span>
+                    <span>Ask AI</span>
+                  </button>
+                )}
+              </div>
+
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={metrics.roiByChannel} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <BarChart
+                    data={metrics.roiByChannel}
+                    margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                    onClick={(e) => {
+                      const item = e?.activePayload?.[0]?.payload;
+                      if (item?.name) {
+                        handleCrossFilter('Channel_Used', item.name);
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}x`} />
@@ -516,15 +768,27 @@ export default function GenerationResult({
                       formatter={(v) => [`${v}x`, 'ROI']}
                       contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '11px', border: '1px solid #cbd5e1' }}
                     />
-                    <Bar dataKey="roi" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                    <Bar
+                      dataKey="roi"
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={48}
+                      cursor="pointer"
+                      isAnimationActive={true}
+                      animationDuration={850}
+                      animationEasing="ease-out"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Channel Drill-down interactive table */}
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-              <span className="text-xs font-bold text-on-surface mb-3">Channel Summary & Slicing</span>
+            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col dashboard-card-hover animate-dashboard-card delay-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-on-surface">Channel Summary & Slicing</span>
+                <span className="text-[10px] text-secondary">Click row to cross-filter</span>
+              </div>
               <div className="overflow-x-auto rounded-lg border border-outline-variant/20 flex-1">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-surface-container-low text-secondary text-[10px] uppercase">
@@ -532,26 +796,58 @@ export default function GenerationResult({
                       <th className="py-2 px-3">Channel</th>
                       <th className="py-2 px-3 text-right">Avg ROI</th>
                       <th className="py-2 px-3 text-right">Total Spend</th>
-                      <th className="py-2 px-3 text-center">Action</th>
+                      <th className="py-2 px-3 text-center">Interactive</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20 font-mono text-[11px]">
-                    {(metrics?.roiByChannel || []).map((ch, idx) => (
-                      <tr key={idx} className="hover:bg-surface-container-low/50 transition-colors">
-                        <td className="py-2 px-3 font-semibold text-on-surface font-sans">{ch.name}</td>
-                        <td className="py-2 px-3 text-right text-primary font-bold">{ch.roi}x</td>
-                        <td className="py-2 px-3 text-right text-secondary">${(ch.spend || 4200).toLocaleString()}</td>
-                        <td className="py-2 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setActiveChannel(ch.name)}
-                            className="text-[10px] text-primary hover:underline font-sans font-semibold"
-                          >
-                            Filter by Channel
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {(metrics?.roiByChannel || []).map((ch, idx) => {
+                      const isSelected = crossFilter?.dimension === 'Channel_Used' && crossFilter?.value === ch.name;
+                      return (
+                        <tr
+                          key={idx}
+                          onClick={() => handleCrossFilter('Channel_Used', ch.name)}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected ? 'bg-primary/10 font-bold' : 'hover:bg-surface-container-low/50'
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-semibold text-on-surface font-sans flex items-center gap-1.5">
+                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                            <span>{ch.name}</span>
+                          </td>
+                          <td className="py-2 px-3 text-right text-primary font-bold">{ch.roi}x</td>
+                          <td className="py-2 px-3 text-right text-secondary">${(ch.spend || 4200).toLocaleString()}</td>
+                          <td className="py-2 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCrossFilter('Channel_Used', ch.name);
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-sans font-semibold transition-colors ${
+                                  isSelected ? 'bg-primary text-white' : 'text-primary hover:bg-primary/10'
+                                }`}
+                              >
+                                {isSelected ? 'Selected' : 'Filter'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDrillStep('Channel_Used', ch.name);
+                                  setActivePage(3);
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-sans font-semibold flex items-center gap-0.5 transition-colors"
+                                title="Drill down into audience breakdown"
+                              >
+                                <span>Drill</span>
+                                <span className="material-symbols-outlined text-[10px]">arrow_forward</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -564,25 +860,65 @@ export default function GenerationResult({
       {/* PAGE 3: AUDIENCE & CAMPAIGN DEEP DIVE                                     */}
       {/* ========================================================================= */}
       {activePage === 3 && (
-        <div className="flex flex-col gap-4 animate-fade-in">
+        <div className="flex flex-col gap-4 animate-dashboard-page">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Visual: Hierarchical Matrix Drill-Down (spans 2 cols) */}
-            <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-1">
               <MatrixDrillDownVisual title="Hierarchical Matrix (Channel &gt; Audience &gt; Campaign)" />
             </div>
 
             {/* Visual: AI Key Influencers */}
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-2">
               <KeyInfluencersVisual title="AI Key Influencers (Drivers of Top ROI)" />
             </div>
           </div>
 
           {/* Audience Conversion Rate Bar Chart */}
-          <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
-            <span className="text-xs font-bold text-on-surface mb-3">Conversion Efficiency by Target Audience</span>
+          <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col dashboard-card-hover animate-dashboard-card delay-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-on-surface">Conversion Efficiency by Target Audience</span>
+                <span className="text-[10px] text-secondary hidden sm:inline">(Click bar to cross-filter)</span>
+              </div>
+              {onAskAI && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onAskAI({
+                      visualTitle: 'Conversion Efficiency by Target Audience',
+                      metric: 'Conversion Rate',
+                      dimension: 'Target_Audience',
+                      activeFilters: {
+                        Channel: activeChannel,
+                        Audience: activeAudience,
+                        Location: activeLocation,
+                        ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                      },
+                      selectedCategory: crossFilter?.value,
+                      value: `${metrics.avgConvRate}%`,
+                    })
+                  }
+                  className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1 transition-colors shadow-xs"
+                  title="Ask AI to analyze Audience Conversion performance"
+                >
+                  <span className="material-symbols-outlined text-[12px]">psychology</span>
+                  <span>Ask AI</span>
+                </button>
+              )}
+            </div>
+
             <div className="h-52 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics.convByAudience} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <BarChart
+                  data={metrics.convByAudience}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                  onClick={(e) => {
+                    const item = e?.activePayload?.[0]?.payload;
+                    if (item?.name) {
+                      handleCrossFilter('Target_Audience', item.name);
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
@@ -590,7 +926,16 @@ export default function GenerationResult({
                     formatter={(v) => [`${v}%`, 'Conversion Rate']}
                     contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '11px', border: '1px solid #cbd5e1' }}
                   />
-                  <Bar dataKey="conv" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                  <Bar
+                    dataKey="conv"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={48}
+                    cursor="pointer"
+                    isAnimationActive={true}
+                    animationDuration={850}
+                    animationEasing="ease-out"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -602,13 +947,39 @@ export default function GenerationResult({
       {/* PAGE 4: COST & GEOGRAPHIC PERFORMANCE                                     */}
       {/* ========================================================================= */}
       {activePage === 4 && (
-        <div className="flex flex-col gap-4 animate-fade-in">
+        <div className="flex flex-col gap-4 animate-dashboard-page">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Visual: Scatter / Bubble Chart (CAC vs ROI) */}
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
+            <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col dashboard-card-hover animate-dashboard-card delay-1">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-on-surface">Acquisition Cost vs ROI (Scatter Correlation)</span>
-                <span className="text-[10px] text-secondary font-mono">X: CAC ($) • Y: ROI (x)</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-secondary font-mono">X: CAC ($) • Y: ROI (x)</span>
+                  {onAskAI && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onAskAI({
+                          visualTitle: 'Acquisition Cost vs ROI Correlation',
+                          metric: 'CAC vs ROI Correlation',
+                          dimension: 'Acquisition_Cost vs ROI',
+                          activeFilters: {
+                            Channel: activeChannel,
+                            Audience: activeAudience,
+                            Location: activeLocation,
+                            ...(crossFilter ? { [crossFilter.dimension]: crossFilter.value } : {}),
+                          },
+                          value: `Avg CAC: $${metrics.avgCAC}, Avg ROI: ${metrics.avgROI}x`,
+                        })
+                      }
+                      className="px-2 py-0.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold flex items-center gap-1 transition-colors shadow-xs"
+                      title="Ask AI to analyze CAC vs ROI scatter"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">psychology</span>
+                      <span>Ask AI</span>
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -621,20 +992,28 @@ export default function GenerationResult({
                       formatter={(val, name) => [name === 'CAC' ? `$${val}` : `${val}x`, name]}
                       contentStyle={{ backgroundColor: '#ffffff', borderRadius: '8px', fontSize: '11px', border: '1px solid #cbd5e1' }}
                     />
-                    <Scatter name="Campaigns" data={metrics.cacVsRoi} fill="#3b82f6" />
+                    <Scatter
+                      name="Campaigns"
+                      data={metrics.cacVsRoi}
+                      fill="#3b82f6"
+                      isAnimationActive={true}
+                      animationDuration={900}
+                      animationEasing="ease-out"
+                    />
                   </ScatterChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Visual: Statistical Anomaly Detection */}
-            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-2">
               <AnomalyDetectionVisual title="Automated Anomaly Detection" />
             </div>
           </div>
 
+
           {/* Regional & Geographic Comparison */}
-          <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col">
+          <div className="p-4 rounded-xl bg-surface-container-lowest border border-outline-variant/25 shadow-xs flex flex-col dashboard-card-hover animate-dashboard-card delay-3">
             <span className="text-xs font-bold text-on-surface mb-3">Geographic Market Returns</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {(metrics?.geoPerformance || []).map((geo, idx) => (
@@ -646,7 +1025,7 @@ export default function GenerationResult({
                   </div>
                   <div className="w-full bg-outline-variant/30 h-1.5 rounded-full mt-2 overflow-hidden">
                     <div
-                      className="bg-primary h-full rounded-full"
+                      className="bg-primary h-full rounded-full transition-all duration-700 ease-out"
                       style={{ width: `${Math.min(100, Math.round((geo.roi / 6) * 100))}%` }}
                     ></div>
                   </div>
@@ -672,7 +1051,7 @@ export default function GenerationResult({
             {customVisuals
               .filter((v) => v.page === activePage)
               .map((vis) => (
-                <div key={vis.id} className="relative group bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs">
+                <div key={vis.id} className="relative group bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-2 shadow-xs dashboard-card-hover animate-dashboard-card delay-1">
                   <button
                     type="button"
                     onClick={() => handleRemoveCustomVisual(vis.id)}

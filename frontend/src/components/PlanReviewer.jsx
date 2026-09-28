@@ -90,13 +90,13 @@ export default function PlanReviewer({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-on-surface">Creating Your Dashboard</h1>
+                <h1 className="text-xl font-bold text-on-surface">Review BI Solution Plan</h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-300">
-                  Ready to Generate
+                  Canonical IR Ready
                 </span>
               </div>
               <p className="text-xs text-secondary mt-0.5">
-                Agent is evaluating metrics and structuring the report
+                Single semantic plan ready to compile into live Web Dashboard and native Power BI (.pbip)
               </p>
             </div>
           </div>
@@ -118,21 +118,23 @@ export default function PlanReviewer({
               type="button"
               onClick={onApproveAndGenerate}
               disabled={isGenerating}
-              className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-primary to-blue-700 hover:from-primary/95 hover:to-blue-800 text-white text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isGenerating ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Generating Power BI Dashboard...</span>
+                  <span>Building BI Solution...</span>
                 </>
               ) : (
                 <>
-                  <span>Generate Power BI Dashboard</span>
+                  <span className="material-symbols-outlined text-sm">rocket_launch</span>
+                  <span>Build BI Solution</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </>
               )}
             </button>
           </div>
+
         </div>
 
         {/* Evaluation Checklist */}

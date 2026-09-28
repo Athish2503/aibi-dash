@@ -80,6 +80,29 @@ export async function generateDashboardPlan(file, aiAssisted = false, prompt = '
   return await res.json();
 }
 
+export async function buildBISolution({ datasetId, customProjectName, aiAssisted = false, prompt = '', plan = null }) {
+  const payload = {
+    dataset_id: datasetId,
+    custom_project_name: customProjectName || undefined,
+    ai_assisted: aiAssisted,
+    prompt: prompt || undefined,
+    plan: plan || undefined,
+  };
+
+  const res = await fetch(`${API_BASE}/powerbi/build-solution`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to build BI Solution');
+  }
+
+  return await res.json();
+}
+
 export async function generatePowerBIProject({ datasetId, customProjectName, aiAssisted = false, prompt = '', plan = null }) {
   const payload = {
     dataset_id: datasetId,
@@ -102,6 +125,7 @@ export async function generatePowerBIProject({ datasetId, customProjectName, aiA
 
   return await res.json();
 }
+
 
 export async function launchPowerBIDesktop(artifactId) {
   const res = await fetch(`${API_BASE}/powerbi/launch`, {

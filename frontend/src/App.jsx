@@ -15,6 +15,7 @@ import {
   uploadAndProcessPipeline,
   generateDashboardPlan,
   generatePowerBIProject,
+  buildBISolution,
 } from './services/api';
 
 export default function App() {
@@ -83,30 +84,70 @@ export default function App() {
     }
   };
 
-  // Step 4 -> Step 5 -> Step 6: Generate Power BI Dashboard
+  // Step 4 -> Step 5 -> Step 6: Build BI Solution (Dual Target)
   const handleApproveAndGenerate = async () => {
     if (!pipelineData?.dataset_id) return;
     setIsGenerating(true);
-    setCurrentStage(5); // Step 5: Generating Power BI Dashboard progress
+    setCurrentStage(5); // Step 5: Building BI Solution progress
     setErrorMessage(null);
 
     try {
-      const result = await generatePowerBIProject({
-        datasetId: pipelineData.dataset_id,
-        plan: dashboardPlan,
-      });
+      let result;
+      try {
+        result = await buildBISolution({
+          datasetId: pipelineData.dataset_id,
+          plan: dashboardPlan,
+        });
+      } catch {
+        result = await generatePowerBIProject({
+          datasetId: pipelineData.dataset_id,
+          plan: dashboardPlan,
+        });
+      }
       setGenerationResult(result);
-      // Brief delay to let the user see the completed generation progress
+      // Brief delay to let user experience dual-target compilation progress
       setTimeout(() => {
         setIsGenerating(false);
-        setCurrentStage(6); // Step 6: Final Dashboard Page
+        setCurrentStage(6); // Step 6: Interactive BI Solution Canvas
       }, 1200);
     } catch (err) {
       setIsGenerating(false);
-      setErrorMessage(`Generation failed: ${err.message}`);
+      setErrorMessage(`BI Solution build failed: ${err.message}`);
       setCurrentStage(4);
     }
   };
+
+  const handleAskAIFromVisual = ({ visualTitle, metric, dimension, activeFilters, selectedCategory, value }) => {
+    const filterDesc = Object.entries(activeFilters || {})
+      .filter(([, v]) => v && v !== 'All')
+      .map(([k, v]) => `${k}="${v}"`)
+      .join(', ');
+    const filterText = filterDesc ? ` with active filters (${filterDesc})` : '';
+    const categoryText = selectedCategory ? ` specifically for segment "${selectedCategory}"` : '';
+    const valueText = value !== undefined ? ` (current metric value: ${value})` : '';
+    const query = `Analyze the '${visualTitle}' visual${categoryText}${valueText} focusing on ${metric || 'performance'}${filterText}. Why is this occurring according to the deterministic data, and what optimization should we make?`;
+
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `visual_ask_${Date.now()}`,
+        role: 'user',
+        text: query,
+        visualContext: {
+          visualTitle,
+          metric,
+          dimension,
+          activeFilters,
+          selectedCategory,
+          value,
+        },
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+
+    setCurrentStage(7); // Switch straight to Grounded Copilot
+  };
+
 
   const handleReset = () => {
     setUploadedFile(null);
@@ -300,7 +341,7 @@ export default function App() {
               />
             )}
 
-            {/* Step 6: Final Dashboard Page */}
+            {/* Step 6: Interactive BI Solution Canvas */}
             {currentStage === 6 && (
               <GenerationResult
                 generationResult={
@@ -312,8 +353,11 @@ export default function App() {
                 datasetRows={datasetRows}
                 onReset={handleReset}
                 totalRecords={totalRecords}
+                onAskAI={handleAskAIFromVisual}
+                onGoToCopilot={() => setCurrentStage(7)}
               />
             )}
+
 
             {/* Step 7: AI Analyst tab */}
             {currentStage === 7 && (

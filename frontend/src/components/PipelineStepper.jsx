@@ -9,37 +9,43 @@ export default function PipelineStepper({
       <div className="max-w-2xl mx-auto py-8 animate-fade-in">
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-8 shadow-sm flex flex-col gap-6">
           <div>
-            <h1 className="text-xl font-bold text-on-surface">Generating Power BI Dashboard</h1>
-            <p className="text-xs text-secondary mt-1">Compiling verified PBIR model artifacts and measures</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-on-surface">Building BI Solution</h1>
+              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                Dual-Target Compile
+              </span>
+            </div>
+            <p className="text-xs text-secondary mt-1">Compiling canonical DashboardSpec into live Web Canvas and native Power BI (.pbip)</p>
           </div>
 
           {/* Steps */}
           <div className="flex flex-col gap-2.5 text-xs font-medium text-on-surface">
             <div className="flex items-center gap-2 text-emerald-600">
               <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Dataset prepared</span>
+              <span>Dataset profiling & quality validation</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-600">
               <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Semantic model created</span>
+              <span>Target 1: Web Dashboard IR (cross-filtering & drilldown specs)</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-600">
               <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Measures generated</span>
+              <span>Target 2: Power BI Semantic Model & PBIR definition</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-600">
               <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Dashboard pages created</span>
+              <span>Deterministic analytics snapshot (KPIs, segments, anomalies)</span>
             </div>
             <div className="flex items-center gap-2 text-emerald-600">
               <span className="material-symbols-outlined text-base">check_circle</span>
-              <span>Visuals configured</span>
+              <span>DAX measures validated & launcher scripts generated</span>
             </div>
-            <div className="flex items-center gap-2 text-primary">
+            <div className="flex items-center gap-2 text-primary font-semibold">
               <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse ml-0.5 mr-1"></span>
-              <span>Publishing dashboard</span>
+              <span>Packaging synchronized deliverables (.pbip + web-spec.json)</span>
             </div>
           </div>
+
 
           {/* Progress bar */}
           <div className="flex flex-col gap-2 py-4">

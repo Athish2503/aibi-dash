@@ -138,3 +138,48 @@ def test_multi_turn_context_resolution(sample_df):
     intent = orchestrator.parse_intent("What about its CAC?", conversation_history=history)
     assert intent.filters.get("Channel_Used") == "Google Ads"
     assert intent.metric == "Acquisition_Cost"
+
+
+def test_visual_spec_combo_chart_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Show channel spend vs ROI dual-axis combo chart", sample_df)
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "combo"
+    assert response.visual_spec["bar_key"] == "spend"
+    assert response.visual_spec["line_key"] == "average_roi"
+    assert len(response.visual_spec["data"]) > 0
+
+
+def test_visual_spec_treemap_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Show me a treemap of channel spend share", sample_df)
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "treemap"
+    assert response.visual_spec["share_key"] == "share"
+    assert len(response.visual_spec["data"]) > 0
+
+
+def test_visual_spec_donut_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Show campaign type breakdown pie chart", sample_df)
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "donut"
+    assert len(response.visual_spec["data"]) > 0
+
+
+def test_visual_spec_scatter_plot_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Show scatter plot correlation between CAC and ROI for top campaigns", sample_df)
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "scatter"
+    assert "Acquisition_Cost" in response.visual_spec["x_key"] or "average_acquisition_cost" in response.visual_spec["x_key"]
+    assert "ROI" in response.visual_spec["y_key"] or "average_roi" in response.visual_spec["y_key"]
+
+
+def test_visual_spec_gauge_generation(sample_df):
+    orchestrator = AgentOrchestrator()
+    response = orchestrator.answer_natural_language_query("Show portfolio ROI benchmark target gauge", sample_df)
+    assert response.visual_spec is not None
+    assert response.visual_spec["type"] == "gauge"
+    assert response.visual_spec["targetValue"] == 5.0
+

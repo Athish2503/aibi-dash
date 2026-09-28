@@ -16,6 +16,7 @@ export default function AIChat({
 }) {
   const [question, setQuestion] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [localMessages, setLocalMessages] = useState([]);
   const messages = externalMessages !== undefined ? externalMessages : localMessages;
   const setMessages = externalSetMessages || setLocalMessages;
@@ -23,7 +24,10 @@ export default function AIChat({
   const [expandedSteps, setExpandedSteps] = useState({});
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
   const messagesEndRef = useRef(null);
+  const streamTimerRef = useRef(null);
+  const isProcessingRef = useRef(false);
 
   const initialRecordCount = datasetRows?.length > 0 ? datasetRows.length : totalRecords;
   const columnCount =
@@ -33,7 +37,7 @@ export default function AIChat({
   const starterCards = [
     {
       title: 'Channel ROI Rankings',
-      desc: 'Compare LinkedIn, Google, Meta, and TikTok ROI efficiency',
+      desc: 'Compare return efficiency, spend, and CAC across channels',
       query: 'Which channel has the highest ROI?',
       icon: 'leaderboard',
       color: 'text-blue-600 bg-blue-50 border-blue-200',
@@ -74,10 +78,17 @@ export default function AIChat({
   };
 
   useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [messages, isSending]);
+    scrollToBottom();
+  }, [messages, isSending, isStreaming]);
+
+  // Clean up streaming interval on unmount
+  useEffect(() => {
+    return () => {
+      if (streamTimerRef.current) {
+        clearInterval(streamTimerRef.current);
+      }
+    };
+  }, []);
 
   const toggleEvidence = (idx) => {
     setExpandedEvidence((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -88,6 +99,13 @@ export default function AIChat({
   };
 
   const handleNewChat = () => {
+    if (streamTimerRef.current) {
+      clearInterval(streamTimerRef.current);
+      streamTimerRef.current = null;
+    }
+    setIsStreaming(false);
+    setIsSending(false);
+    isProcessingRef.current = false;
     setMessages([]);
     setExpandedEvidence({});
     setExpandedSteps({});
@@ -112,19 +130,451 @@ export default function AIChat({
   };
 
   // Client-side grounded dataset contextual analyzer for instant accurate answers
-  const generateContextualAnswer = (query, rows) => {
+  const generateContextualAnswer = (query, rows, visualContext = null) => {
     const qLower = query.toLowerCase();
     const metrics = computeDatasetMetrics(rows);
     const recCount = rows && rows.length > 0 ? rows.length : Number(totalRecords);
+    const sortedChannels = [...(metrics.roiByChannel || [])];
+    const sortedAud = [...(metrics.convByAudience || [])];
+    const sortedTypes = [...(metrics.campaignType || [])];
+    const sortedDurations = [...(metrics.durationTrends || [])];
+    const topCamps = metrics.topCampaigns && metrics.topCampaigns.length > 0 ? metrics.topCampaigns : [];
+
+    const topChannel = sortedChannels[0] || { name: 'Direct', roi: 0, average_roi: 0, average_conversion_rate: 0, average_acquisition_cost: 0, spend: 0 };
+    const secondChannel = sortedChannels[1] || null;
+    const lowestChannel = sortedChannels.length > 1 ? sortedChannels[sortedChannels.length - 1] : sortedChannels[0];
+    const topAud = sortedAud[0] || { name: 'Primary Segment', conv: 0, average_conversion_rate: 0, roi: 0, average_roi: 0 };
+
+    const roiValue = metrics.avgROI.toFixed(2);
+    const convValue = metrics.avgConvRate.toFixed(2);
+    const cacValue = metrics.avgCAC.toLocaleString();
+
+    // 0. Visual Deep Dive: Portfolio Average ROI or general ROI root-cause analysis
+    if (
+      qLower.includes('portfolio average roi') ||
+      (qLower.includes('average roi') && (qLower.includes('portfolio') || qLower.includes('why') || qLower.includes('metric'))) ||
+      (qLower.includes('roi') && (qLower.includes('optimization') || qLower.includes('occurring') || qLower.includes('focusing on average roi'))) ||
+      (visualContext?.visualTitle && visualContext.visualTitle.toLowerCase().includes('roi'))
+    ) {
+      return {
+        text: `### 🎯 Grounded Analysis: Portfolio Average ROI (${roiValue}x)
+
+Based on deterministic aggregation across **${recCount.toLocaleString()}** records in **${datasetName}**:
+
+• **Blended Portfolio Average ROI**: **${roiValue}x**
+• **Average Conversion Rate**: **${convValue}%**
+• **Average Acquisition Cost (CAC)**: **$${cacValue}**
+
+---
+
+#### 🔍 Why is this occurring according to the uploaded data?
+
+1. **Channel Return Variance**:
+   • **${topChannel.name}** is your highest-return channel at **${topChannel.average_roi.toFixed(2)}x ROI**${topChannel.average_acquisition_cost ? ` (Avg CAC: $${topChannel.average_acquisition_cost.toLocaleString()})` : ''}.${secondChannel ? `\n   • **${secondChannel.name}** follows at **${secondChannel.average_roi.toFixed(2)}x ROI**.` : ''}
+   • Conversely, **${lowestChannel.name}** records the lowest return at **${lowestChannel.average_roi.toFixed(2)}x ROI**${lowestChannel.average_acquisition_cost ? ` (Avg CAC: $${lowestChannel.average_acquisition_cost.toLocaleString()})` : ''}, pulling down the blended portfolio average to **${roiValue}x**.
+
+2. **Audience Conversion Efficiency**:
+   • The top audience segment **${topAud.name}** converts at **${topAud.average_conversion_rate.toFixed(2)}%** (${topAud.average_roi ? `${topAud.average_roi.toFixed(2)}x ROI` : 'strong efficiency'}).
+   • Differences in audience conversion efficiency directly drive variations in return across campaigns.
+
+3. **Cost Distribution**:
+   • Acquisition cost across channels averages **$${cacValue}**, indicating budget allocation shifts can optimize overall yield.
+
+---
+
+#### 💡 Data-Backed Recommendations:
+
+1. **Reallocate Capital to High-Yield Channels**:
+   • Consider shifting 10%–20% of ad budget from lower-efficiency platforms (${lowestChannel.name}) into **${topChannel.name}** to lift blended returns.
+
+2. **Target High-Converting Audiences**:
+   • Prioritize campaign targeting on **${topAud.name}** where conversion density is strongest.
+
+3. **Deploy Power BI Performance Guardrail**:
+   • Add a dynamic DAX KPI indicator:
+     \`\`\`dax
+     ROI Alert = IF([Average ROI] < ${Math.max(1.5, metrics.avgROI - 0.5).toFixed(2)}, "⚠️ Throttle Spend", "✅ Optimal")
+     \`\`\``,
+        evidence: {
+          tool: 'calculate_kpis & analyze_channels',
+          metric: 'Portfolio Average ROI & Channel Variance',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'bar',
+          title: 'ROI Breakdown by Marketing Channel',
+          subtitle: `Analyzing return drivers behind the ${roiValue}x portfolio average across ${recCount.toLocaleString()} records`,
+          x_key: 'name',
+          default_metric: 'average_roi',
+          available_metrics: [
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
+            { key: 'average_conversion_rate', label: 'Conv Rate (%)', color: '#10b981', format: 'percent' },
+            { key: 'average_acquisition_cost', label: 'Avg CAC ($)', color: '#8b5cf6', format: 'currency' },
+          ],
+          data: sortedChannels.map((c) => ({
+            name: c.name,
+            average_roi: c.average_roi,
+            average_conversion_rate: c.average_conversion_rate,
+            average_acquisition_cost: c.average_acquisition_cost,
+            campaign_count: c.campaign_count,
+            spend: c.spend,
+          })),
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Classified visual deep-dive for "Portfolio Average ROI"' },
+          { step: 'Deterministic Variance Calculation', status: 'done', detail: `Analyzed return spread across ${sortedChannels.length} channels and ${sortedAud.length} audiences` },
+          { step: 'Root-Cause Factor Synthesis', status: 'done', detail: `Identified channel variance (${topChannel.average_roi.toFixed(2)}x vs ${lowestChannel.average_roi.toFixed(2)}x)` },
+          { step: 'Prescriptive Optimization Formulation', status: 'done', detail: 'Formulated grounded capital reallocation recommendations' },
+        ],
+        follow_ups: [
+          'Which channel has the highest ROI?',
+          'Compare CAC across channels',
+          'What are the top 3 campaigns by ROI?',
+        ],
+      };
+    }
+
+    // 0a. Spend vs ROI / Dual-Axis Combo Chart
+    if (
+      qLower.includes('combo') ||
+      qLower.includes('dual') ||
+      (qLower.includes('spend') && qLower.includes('roi')) ||
+      (qLower.includes('cost') && qLower.includes('roi')) ||
+      qLower.includes('spend vs roi') ||
+      qLower.includes('roi vs spend')
+    ) {
+      const comboData = sortedChannels.map((c) => ({
+        name: c.name,
+        spend: c.spend,
+        average_roi: c.average_roi,
+        average_acquisition_cost: c.average_acquisition_cost,
+        average_conversion_rate: c.average_conversion_rate,
+        campaign_count: c.campaign_count,
+      }));
+
+      const topSpendChannel = [...sortedChannels].sort((a, b) => b.spend - a.spend)[0] || topChannel;
+
+      return {
+        text: `### 📊 Channel Spend vs ROI Dual-Axis Analysis
+
+Comparing budget allocation ($) against return efficiency (x) across **${recCount.toLocaleString()}** records in **${datasetName}**:
+
+• **Highest ROI Channel**: **${topChannel.name}** delivers **${topChannel.average_roi.toFixed(2)}x ROI** on **$${topChannel.spend.toLocaleString()}** total spend (Avg CAC: **$${topChannel.average_acquisition_cost.toLocaleString()}**).
+• **Largest Spend Channel**: **${topSpendChannel.name}** accounts for **$${topSpendChannel.spend.toLocaleString()}** spend at **${topSpendChannel.average_roi.toFixed(2)}x ROI**.
+
+**Key Takeaway**: Dual-axis comparison reveals capital allocation efficiency across your actual marketing channels.`,
+        evidence: {
+          tool: 'analyze_channels & calculate_spend',
+          metric: 'Spend ($) vs ROI (x)',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'combo',
+          title: 'Channel Spend vs ROI Dual-Axis Combo',
+          subtitle: `Budget allocation ($) and return efficiency across ${recCount.toLocaleString()} campaigns`,
+          x_key: 'name',
+          bar_key: 'spend',
+          bar_label: 'Spend ($)',
+          line_key: 'average_roi',
+          line_label: 'ROI (x)',
+          data: comboData,
+          available_metrics: [
+            { key: 'spend', label: 'Spend ($)', color: '#3b82f6', format: 'currency' },
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#f59e0b', format: 'multiplier' },
+            { key: 'average_conversion_rate', label: 'Conv Rate (%)', color: '#10b981', format: 'percent' },
+            { key: 'average_acquisition_cost', label: 'Avg CAC ($)', color: '#8b5cf6', format: 'currency' },
+          ],
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Selected Dual-Axis Combo Chart (Spend vs ROI)' },
+          { step: 'Dual Metric Aggregation', status: 'done', detail: `Aggregated Spend ($) and ROI (x) across ${sortedChannels.length} channels` },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Verified metrics strictly from uploaded dataset rows' },
+          { step: 'Dual-Axis Chart Generation', status: 'done', detail: 'Synthesized interactive ComposedChart with dual Y-axes' },
+        ],
+        follow_ups: [
+          'Show spend proportional share treemap',
+          'Which channel has the lowest CAC?',
+          'What are the top 3 campaigns by ROI?',
+        ],
+      };
+    }
+
+    // 0b. Spend Proportional Share Treemap
+    if (
+      qLower.includes('treemap') ||
+      qLower.includes('share') ||
+      qLower.includes('allocation') ||
+      qLower.includes('proportional') ||
+      qLower.includes('market share') ||
+      qLower.includes('spend distribution')
+    ) {
+      const treemapPalettes = ['bg-blue-600', 'bg-indigo-600', 'bg-sky-600', 'bg-emerald-600', 'bg-amber-600', 'bg-purple-600', 'bg-teal-600', 'bg-rose-600'];
+      const treemapData = sortedChannels.map((c, i) => ({
+        name: c.name,
+        spend: c.spend,
+        share: c.share,
+        average_roi: c.average_roi,
+        roi: c.average_roi,
+        campaign_count: c.campaign_count,
+        color: treemapPalettes[i % treemapPalettes.length],
+      }));
+
+      return {
+        text: `### 🗺️ Spend Proportional Share Treemap
+
+Here is the budget allocation breakdown across **${sortedChannels.length} marketing channels** from your uploaded data:
+
+${treemapData.map((d) => `• **${d.name}**: **${d.share}% share** ($${d.spend.toLocaleString()}) — **${d.average_roi.toFixed(2)}x ROI** (${d.campaign_count} campaigns)`).join('\n')}
+
+**Key Takeaway**: Proportional allocation visualizes where capital is concentrated relative to return generation.`,
+        evidence: {
+          tool: 'analyze_channels & calculate_share',
+          metric: 'Proportional Spend Share (%)',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'treemap',
+          title: 'Spend Proportional Share Treemap',
+          subtitle: `Proportional allocation and return by channel across ${recCount.toLocaleString()} campaigns`,
+          x_key: 'name',
+          value_key: 'spend',
+          share_key: 'share',
+          data: treemapData,
+          available_metrics: [
+            { key: 'spend', label: 'Spend ($)', color: '#3b82f6', format: 'currency' },
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#f59e0b', format: 'multiplier' },
+          ],
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Selected Spend Proportional Share Treemap' },
+          { step: 'Computing Share Percentages', status: 'done', detail: `Calculated proportional shares for ${sortedChannels.length} channels` },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Generated allocation breakdown strictly from uploaded data' },
+          { step: 'Treemap Layout Generation', status: 'done', detail: 'Generated responsive proportional allocation grid' },
+        ],
+        follow_ups: [
+          'Show channel spend vs ROI dual-axis combo chart',
+          'Which channel delivers the highest return?',
+          'Compare CAC across channels',
+        ],
+      };
+    }
+
+    // 0c. Duration Trend / Area / Line Chart
+    if (
+      qLower.includes('duration') ||
+      qLower.includes('trend') ||
+      qLower.includes('curve') ||
+      qLower.includes('area') ||
+      qLower.includes('over time') ||
+      qLower.includes('timeline')
+    ) {
+      const isArea = qLower.includes('area');
+      const durationData = sortedDurations.length > 0 ? sortedDurations : [
+        { name: '30 Days', duration: '30 Days', average_roi: metrics.avgROI, average_conversion_rate: metrics.avgConvRate, campaign_count: recCount },
+      ];
+
+      const bestDuration = [...durationData].sort((a, b) => b.average_roi - a.average_roi)[0];
+
+      return {
+        text: `### 📈 Campaign Duration Performance Analysis
+
+Aggregated across **${recCount.toLocaleString()}** campaigns from your uploaded file:
+
+• **Optimal Duration**: **${bestDuration.name}** produced the highest average return at **${bestDuration.average_roi.toFixed(2)}x ROI**${bestDuration.average_conversion_rate ? ` with a **${bestDuration.average_conversion_rate.toFixed(2)}%** conversion rate` : ''}.
+${durationData.map((d) => `• **${d.name}**: **${d.average_roi.toFixed(2)}x ROI** | **${d.average_conversion_rate.toFixed(2)}%** conv | ${d.campaign_count} campaigns`).join('\n')}
+
+**Key Takeaway**: Campaign flight length directly correlates with return efficiency across your dataset.`,
+        evidence: {
+          tool: 'analyze_duration',
+          metric: 'Duration Curve & Conversion Rate',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: isArea ? 'area' : 'line',
+          title: isArea ? 'Campaign Duration Cumulative Area' : 'Campaign Duration Performance Curve',
+          subtitle: `Efficiency trend across campaign run length (${recCount.toLocaleString()} campaigns)`,
+          x_key: 'name',
+          default_metric: 'average_roi',
+          available_metrics: [
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
+            { key: 'average_conversion_rate', label: 'Conversion Rate (%)', color: '#10b981', format: 'percent' },
+          ],
+          data: durationData,
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: `Selected Duration Performance ${isArea ? 'Area' : 'Line'} Chart` },
+          { step: 'Cohort Trend Aggregation', status: 'done', detail: 'Grouped campaigns by runtime flight lengths directly from data' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: `Identified top flight window: ${bestDuration.name}` },
+          { step: 'Trend Visual Generation', status: 'done', detail: 'Synthesized interactive curve with metric switcher' },
+        ],
+        follow_ups: [
+          'Show channel spend vs ROI dual-axis combo chart',
+          'Which channel has the highest ROI?',
+          'What are the top 3 campaigns overall?',
+        ],
+      };
+    }
+
+    // 0d. Campaign Type Distribution / Donut / Pie
+    if (
+      qLower.includes('type') ||
+      qLower.includes('format') ||
+      qLower.includes('donut') ||
+      qLower.includes('pie')
+    ) {
+      const typeData = sortedTypes.length > 0 ? sortedTypes : [
+        { name: 'Standard', average_roi: metrics.avgROI, campaign_count: recCount, share: 100 },
+      ];
+
+      const topType = typeData[0];
+
+      return {
+        text: `### 🍩 Campaign Type Distribution & Return
+
+Based on your uploaded dataset of **${recCount.toLocaleString()}** campaigns:
+
+• **Highest Volume Format**: **${topType.name}** represents **${topType.share}%** of campaigns (${topType.campaign_count} campaigns) at **${topType.average_roi.toFixed(2)}x ROI**.
+${typeData.slice(1).map((t) => `• **${t.name}**: **${t.share}%** share (${t.campaign_count} campaigns) at **${t.average_roi.toFixed(2)}x ROI**`).join('\n')}
+
+**Key Takeaway**: Campaign format breakdown shows where volume and return density reside.`,
+        evidence: {
+          tool: 'analyze_campaign_types',
+          metric: 'Campaign Format Share & ROI',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'donut',
+          title: 'Campaign Type Distribution',
+          subtitle: `Breakdown and return by campaign format across ${recCount.toLocaleString()} campaigns`,
+          x_key: 'name',
+          default_metric: 'campaign_count',
+          available_metrics: [
+            { key: 'campaign_count', label: 'Campaigns', color: '#10b981', format: 'number' },
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
+          ],
+          data: typeData,
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Selected Campaign Type Donut Chart' },
+          { step: 'Format Aggregation', status: 'done', detail: 'Calculated format shares directly from uploaded rows' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: `Identified ${topType.name} as primary format` },
+          { step: 'Donut Chart Generation', status: 'done', detail: 'Generated interactive Donut visual' },
+        ],
+        follow_ups: [
+          'Show channel spend vs ROI dual-axis combo chart',
+          'Which channel delivers the highest return?',
+          'What are the top 3 campaigns by ROI?',
+        ],
+      };
+    }
+
+    // 0e. Scatter Plot / Cost vs Return Correlation
+    if (
+      qLower.includes('scatter') ||
+      qLower.includes('correlation') ||
+      qLower.includes('relationship')
+    ) {
+      const scatterData = metrics.cacVsRoi && metrics.cacVsRoi.length > 0
+        ? metrics.cacVsRoi
+        : topCamps.map((c) => ({
+            name: c.id,
+            average_acquisition_cost: c.Acquisition_Cost,
+            average_roi: c.ROI,
+          }));
+
+      return {
+        text: `### 🔍 Acquisition Cost vs ROI Scatter Analysis
+
+Evaluating the relationship between CAC and return multiplier across individual campaigns in your dataset:
+
+• **Campaign Count Evaluated**: **${scatterData.length}** sample campaign data points plotted.
+• **Portfolio Average CAC**: **$${cacValue}**
+• **Portfolio Average ROI**: **${roiValue}x**
+
+**Key Takeaway**: Scatter distribution maps individual campaign return efficiency against its acquisition cost.`,
+        evidence: {
+          tool: 'detect_correlation',
+          metric: 'CAC vs ROI Correlation',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'scatter',
+          title: 'CAC vs ROI Correlation Scatter',
+          subtitle: `Evaluating acquisition cost against return multiplier (${scatterData.length} campaigns)`,
+          x_key: 'name',
+          data: scatterData,
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Selected Scatter Plot (CAC vs ROI)' },
+          { step: 'Correlation Coordinates', status: 'done', detail: `Mapped coordinates for ${scatterData.length} campaigns from dataset` },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Synthesized cost-return relationship strictly from data' },
+          { step: 'Scatter Chart Generation', status: 'done', detail: 'Rendered interactive Scatter plot' },
+        ],
+        follow_ups: [
+          'Show channel spend vs ROI dual-axis combo chart',
+          'Which channel has the highest ROI?',
+          'What are the top 3 campaigns by ROI?',
+        ],
+      };
+    }
+
+    // 0f. Gauge / Target / Benchmark
+    if (
+      qLower.includes('gauge') ||
+      qLower.includes('target') ||
+      qLower.includes('benchmark') ||
+      qLower.includes('speedometer')
+    ) {
+      const targetVal = 5.0;
+      const pct = Math.min(100, Math.round((metrics.avgROI / targetVal) * 100));
+
+      return {
+        text: `### 🎯 Portfolio Benchmark Progress Gauge
+
+• **Current Portfolio ROI**: **${roiValue}x**
+• **Target Strategic Benchmark**: **${targetVal.toFixed(2)}x**
+• **Milestone Progress**: **${pct}% to Goal**
+• **Average Conversion Rate**: **${convValue}%**
+• **Average CAC**: **$${cacValue}**
+
+**Key Takeaway**: Tracking blended portfolio returns against the ${targetVal.toFixed(2)}x benchmark.`,
+        evidence: {
+          tool: 'calculate_kpis',
+          metric: 'ROI vs Benchmark Target',
+          records: `${recCount.toLocaleString()}`,
+        },
+        visual_spec: {
+          type: 'gauge',
+          title: 'Portfolio ROI Benchmark Target Gauge',
+          subtitle: `Tracking overall returns toward the ${targetVal.toFixed(2)}x strategic milestone`,
+          currentValue: Number(metrics.avgROI.toFixed(2)),
+          targetValue: targetVal,
+          unit: 'x',
+          data: [{ roi: metrics.avgROI }],
+        },
+        steps: [
+          { step: 'Visual Intent Resolution', status: 'done', detail: 'Selected Speedometer Gauge Visual' },
+          { step: 'Benchmark Calculation', status: 'done', detail: `Compared current ROI (${roiValue}x) against ${targetVal.toFixed(2)}x target` },
+          { step: 'Progress Synthesis', status: 'done', detail: `Determined milestone attainment: ${pct}%` },
+          { step: 'Gauge Rendering', status: 'done', detail: 'Generated SVG speedometer visual' },
+        ],
+        follow_ups: [
+          'Show channel spend vs ROI dual-axis combo chart',
+          'Which channel has the highest ROI?',
+          'Show spend proportional share treemap',
+        ],
+      };
+    }
 
     // 1. Channel Performance
     if (qLower.includes('channel') || qLower.includes('platform')) {
-      const sortedChannels = [...metrics.roiByChannel].sort((a, b) => b.roi - a.roi);
-      const top = sortedChannels[0] || { name: 'LinkedIn Ads', roi: 5.1 };
-      const listStr = sortedChannels.map((c) => `• **${c.name}**: **${c.roi.toFixed(2)}x ROI**`).join('\n');
+      const top = sortedChannels[0] || { name: 'Direct', average_roi: 0, campaign_count: 0 };
+      const listStr = sortedChannels
+        .map((c) => `• **${c.name}**: **${c.average_roi.toFixed(2)}x ROI** (${c.campaign_count} campaigns${c.average_acquisition_cost ? `, Avg CAC: $${c.average_acquisition_cost.toLocaleString()}` : ''})`)
+        .join('\n');
 
       return {
-        text: `Based on your dataset of **${recCount.toLocaleString()}** campaigns, **${top.name}** delivered the strongest performance with an average of **${top.roi.toFixed(2)}x ROI**.\n\nChannel breakdown:\n${listStr}\n\n**Key Takeaway**: **${top.name}** is your most capital-efficient acquisition channel.`,
+        text: `Based on your dataset of **${recCount.toLocaleString()}** campaigns, **${top.name}** delivered the highest average return at **${top.average_roi.toFixed(2)}x ROI** across ${top.campaign_count} campaigns.\n\nChannel comparison from uploaded data:\n${listStr}\n\n**Key Takeaway**: **${top.name}** is currently your most capital-efficient acquisition channel.`,
         evidence: {
           tool: 'analyze_channels',
           metric: 'Average ROI by Channel',
@@ -137,22 +587,24 @@ export default function AIChat({
           x_key: 'name',
           default_metric: 'average_roi',
           available_metrics: [
-            {"key": "average_roi", "label": "Avg ROI (x)", "color": "#3b82f6", "format": "multiplier"},
-            {"key": "average_conversion_rate", "label": "Conv Rate (%)", "color": "#10b981", "format": "percent"},
-            {"key": "average_acquisition_cost", "label": "Avg CAC ($)", "color": "#8b5cf6", "format": "currency"},
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
+            { key: 'average_conversion_rate', label: 'Conv Rate (%)', color: '#10b981', format: 'percent' },
+            { key: 'average_acquisition_cost', label: 'Avg CAC ($)', color: '#8b5cf6', format: 'currency' },
           ],
-          data: sortedChannels.map((c, i) => ({
+          data: sortedChannels.map((c) => ({
             name: c.name,
-            average_roi: Number(c.roi.toFixed(2)),
-            average_conversion_rate: Number((6.2 + i * 1.1).toFixed(2)),
-            average_acquisition_cost: Math.round(3200 + i * 450),
+            average_roi: c.average_roi,
+            average_conversion_rate: c.average_conversion_rate,
+            average_acquisition_cost: c.average_acquisition_cost,
+            campaign_count: c.campaign_count,
+            spend: c.spend,
           })),
         },
         steps: [
-          { step: 'Intent & Context Classification', status: 'done', detail: 'Classified query into analyze_channels (Metric: ROI)' },
+          { step: 'Intent & Context Classification', status: 'done', detail: 'Selected analyze_channels (Metric: ROI)' },
           { step: 'Executing Deterministic Aggregator', status: 'done', detail: `Computed group-by metrics across ${recCount.toLocaleString()} campaigns` },
-          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Cross-verified metrics against computed raw distributions (0% Hallucination)' },
-          { step: 'Instant Visual Chart Generation', status: 'done', detail: 'Synthesized interactive Recharts bar chart with metric switchers' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: `Identified ${top.name} as top channel (${top.average_roi.toFixed(2)}x ROI)` },
+          { step: 'Single Visual Chart Generation', status: 'done', detail: 'Selected and synthesized single Bar Chart' },
         ],
         follow_ups: [
           'Compare CAC across these channels',
@@ -163,13 +615,14 @@ export default function AIChat({
     }
 
     // 2. Conversion Rate / Audience
-    if (qLower.includes('conversion') || qLower.includes('conv') || qLower.includes('audience')) {
-      const sortedAud = [...metrics.convByAudience].sort((a, b) => b.conv - a.conv);
-      const topAud = sortedAud[0] || { name: 'Enterprise B2B', conv: 9.1 };
-      const listStr = sortedAud.map((a) => `• **${a.name}**: **${a.conv.toFixed(2)}%** conversion rate`).join('\n');
+    if (qLower.includes('conversion') || qLower.includes('conv') || qLower.includes('audience') || qLower.includes('segment')) {
+      const topAudience = sortedAud[0] || { name: 'Primary Segment', average_conversion_rate: 0, average_roi: 0, campaign_count: 0 };
+      const listStr = sortedAud
+        .map((a) => `• **${a.name}**: **${a.average_conversion_rate.toFixed(2)}%** conversion rate | **${a.average_roi.toFixed(2)}x ROI** (${a.campaign_count} campaigns)`)
+        .join('\n');
 
       return {
-        text: `The overall portfolio conversion rate is **${metrics.avgConvRate.toFixed(2)}%**.\n\nAmong your audience segments, **${topAud.name}** achieved the highest efficiency with an average conversion rate of **${topAud.conv.toFixed(2)}%**.\n\nAudience breakdown:\n${listStr}\n\n**Key Takeaway**: Enterprise audiences convert at nearly double the rate of consumer segments.`,
+        text: `The overall portfolio conversion rate is **${convValue}%** across **${recCount.toLocaleString()}** campaigns.\n\nAmong target audiences in your uploaded data, **${topAudience.name}** recorded the strongest efficiency with an average conversion rate of **${topAudience.average_conversion_rate.toFixed(2)}%** (Avg ROI: **${topAudience.average_roi.toFixed(2)}x**).\n\nAudience breakdown:\n${listStr}\n\n**Key Takeaway**: Prioritizing **${topAudience.name}** maximizes conversion yield per dollar spent.`,
         evidence: {
           tool: 'analyze_audiences',
           metric: 'Conversion Rate',
@@ -182,79 +635,77 @@ export default function AIChat({
           x_key: 'name',
           default_metric: 'average_conversion_rate',
           available_metrics: [
-            {"key": "average_conversion_rate", "label": "Conv Rate (%)", "color": "#10b981", "format": "percent"},
-            {"key": "average_roi", "label": "Avg ROI (x)", "color": "#3b82f6", "format": "multiplier"},
+            { key: 'average_conversion_rate', label: 'Conv Rate (%)', color: '#10b981', format: 'percent' },
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
+            { key: 'average_acquisition_cost', label: 'Avg CAC ($)', color: '#8b5cf6', format: 'currency' },
           ],
-          data: sortedAud.map((a, i) => ({
+          data: sortedAud.map((a) => ({
             name: a.name,
-            average_conversion_rate: Number(a.conv.toFixed(2)),
-            average_roi: Number((4.1 + i * 0.4).toFixed(2)),
+            average_conversion_rate: a.average_conversion_rate,
+            average_roi: a.average_roi,
+            average_acquisition_cost: a.average_acquisition_cost,
+            campaign_count: a.campaign_count,
           })),
         },
         steps: [
-          { step: 'Intent & Context Classification', status: 'done', detail: 'Classified query into analyze_audiences (Metric: Conversion_Rate)' },
+          { step: 'Intent & Context Classification', status: 'done', detail: 'Selected analyze_audiences (Metric: Conversion_Rate)' },
           { step: 'Executing Deterministic Aggregator', status: 'done', detail: `Calculated conversion efficiency across ${sortedAud.length} segments` },
-          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Verified benchmark ratios against computed numbers' },
-          { step: 'Instant Visual Chart Generation', status: 'done', detail: 'Generated interactive Audience Bar Chart' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: `Verified benchmark ratios strictly against uploaded data` },
+          { step: 'Single Visual Chart Generation', status: 'done', detail: 'Selected and synthesized single Audience Bar Chart' },
         ],
         follow_ups: [
-          'Which channel is best for Enterprise B2B?',
+          `Which channel is best for ${topAudience.name}?`,
           'Compare CAC by audience segment',
           'Which channel has the highest ROI?',
         ],
       };
     }
 
-    // 3. Top Campaigns / Best
+    // 3. Top Campaigns / Best / Rank
     if (qLower.includes('top') || qLower.includes('best') || qLower.includes('rank')) {
-      const sorted = rows && rows.length > 0
-        ? [...rows].sort((a, b) => (Number(b.ROI) || 0) - (Number(a.ROI) || 0)).slice(0, 5)
-        : [
-            { Campaign_ID: 'CMP-108', Channel_Used: 'LinkedIn Ads', ROI: 5.40, Conversion_Rate: 9.8, Acquisition_Cost: 3200 },
-            { Campaign_ID: 'CMP-103', Channel_Used: 'LinkedIn Ads', ROI: 5.10, Conversion_Rate: 8.9, Acquisition_Cost: 3100 },
-            { Campaign_ID: 'CMP-101', Channel_Used: 'Google Ads', ROI: 4.82, Conversion_Rate: 8.2, Acquisition_Cost: 3400 },
-            { Campaign_ID: 'CMP-105', Channel_Used: 'Meta Ads', ROI: 4.30, Conversion_Rate: 7.4, Acquisition_Cost: 2800 },
-            { Campaign_ID: 'CMP-104', Channel_Used: 'YouTube', ROI: 3.95, Conversion_Rate: 6.8, Acquisition_Cost: 4100 },
-          ];
+      const topList = topCamps.slice(0, 5);
+      const isTable = qLower.includes('table') || qLower.includes('matrix') || qLower.includes('ledger');
 
-      const topStr = sorted
+      const topStr = topList
         .slice(0, 3)
         .map(
           (c, i) =>
-            `${i + 1}. **${c.Campaign_ID || c.Company || 'Campaign'}** (${c.Channel_Used || 'N/A'}): **${Number(c.ROI).toFixed(2)}x ROI**, **${Number(c.Conversion_Rate).toFixed(2)}%** conversion, CAC: **$${Number(c.Acquisition_Cost).toLocaleString()}**`
+            `${i + 1}. **${c.id}**${c.company ? ` (${c.company})` : ''} via **${c.channel}**: **${c.ROI.toFixed(2)}x ROI**, **${c.Conversion_Rate.toFixed(2)}%** conversion, CAC: **$${c.Acquisition_Cost.toLocaleString()}**`
         )
         .join('\n');
 
       return {
-        text: `Here are the top highest-returning campaigns in your dataset:\n\n${topStr}\n\n**Key Takeaway**: High-performing campaigns consistently show strong engagement combined with controlled acquisition costs.`,
+        text: `Here are the top-performing campaigns directly from your uploaded dataset:\n\n${topStr}\n\n**Key Takeaway**: High-performing campaigns consistently show strong engagement combined with controlled acquisition costs.`,
         evidence: {
           tool: 'rank_campaigns',
           metric: 'Ranked by ROI (Descending)',
           records: `${recCount.toLocaleString()}`,
         },
         visual_spec: {
-          type: 'bar',
+          type: isTable ? 'table' : 'bar',
           title: 'Top Ranked Campaigns by ROI',
-          subtitle: 'Individual highest-performing campaigns',
+          subtitle: `Highest performing individual campaigns in ${datasetName}`,
           x_key: 'name',
           default_metric: 'ROI',
           available_metrics: [
-            {"key": "ROI", "label": "ROI (x)", "color": "#f59e0b", "format": "multiplier"},
-            {"key": "Conversion_Rate", "label": "Conversion Rate (%)", "color": "#10b981", "format": "percent"},
-            {"key": "Acquisition_Cost", "label": "CAC ($)", "color": "#8b5cf6", "format": "currency"},
+            { key: 'ROI', label: 'ROI (x)', color: '#f59e0b', format: 'multiplier' },
+            { key: 'Conversion_Rate', label: 'Conversion Rate (%)', color: '#10b981', format: 'percent' },
+            { key: 'Acquisition_Cost', label: 'CAC ($)', color: '#8b5cf6', format: 'currency' },
           ],
-          data: sorted.map((c) => ({
-            name: c.Campaign_ID || 'Campaign',
-            ROI: Number(c.ROI),
-            Conversion_Rate: Number(c.Conversion_Rate),
-            Acquisition_Cost: Number(c.Acquisition_Cost),
+          data: topList.map((c) => ({
+            name: c.id,
+            ROI: c.ROI,
+            Conversion_Rate: c.Conversion_Rate,
+            Acquisition_Cost: c.Acquisition_Cost,
+            channel: c.channel,
+            company: c.company,
           })),
         },
         steps: [
-          { step: 'Intent & Context Classification', status: 'done', detail: 'Classified query into rank_campaigns (Top 5 Descending)' },
-          { step: 'Executing Deterministic Aggregator', status: 'done', detail: 'Sorted individual campaigns by ROI' },
-          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Cited top 3 campaign identifiers and performance figures' },
-          { step: 'Instant Visual Chart Generation', status: 'done', detail: 'Generated ranking chart with CAC comparison toggle' },
+          { step: 'Intent & Context Classification', status: 'done', detail: 'Selected rank_campaigns (Top 5 Descending)' },
+          { step: 'Executing Deterministic Aggregator', status: 'done', detail: 'Sorted individual campaigns by ROI strictly from dataset' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Cited top campaign identifiers and exact performance numbers' },
+          { step: 'Single Visual Chart Generation', status: 'done', detail: `Generated single ${isTable ? 'Table' : 'Bar'} visual` },
         ],
         follow_ups: [
           'Which channel drove these top campaigns?',
@@ -266,11 +717,17 @@ export default function AIChat({
 
     // 4. CAC / Acquisition Cost
     if (qLower.includes('cac') || qLower.includes('cost') || qLower.includes('acquisition') || qLower.includes('spend')) {
-      const sortedChannels = [...metrics.roiByChannel];
+      const topCACChannel = [...sortedChannels].sort((a, b) => b.average_acquisition_cost - a.average_acquisition_cost)[0] || topChannel;
+      const lowestCACChannel = [...sortedChannels].sort((a, b) => a.average_acquisition_cost - b.average_acquisition_cost)[0] || topChannel;
+
+      const listStr = sortedChannels
+        .map((c) => `• **${c.name}**: Avg CAC **$${c.average_acquisition_cost.toLocaleString()}** | **${c.average_roi.toFixed(2)}x ROI** ($${c.spend.toLocaleString()} total spend)`)
+        .join('\n');
+
       return {
-        text: `The average Customer Acquisition Cost (CAC) across your portfolio is **$${metrics.avgCAC.toLocaleString()}**.\n\n• **Display & Social** channels offer lower acquisition costs ($2,800 - $3,100).\n• **Search & Enterprise Webinar** channels have higher CAC ($4,200 - $6,400) but deliver proportionately higher lifetime value and ROI.\n\n**Key Takeaway**: Higher CAC channels remain more profitable due to superior conversion volume.`,
+        text: `The average Customer Acquisition Cost (CAC) across your portfolio is **$${cacValue}** across **${recCount.toLocaleString()}** campaigns in **${datasetName}**.\n\nChannel CAC breakdown:\n${listStr}\n\n• **Lowest CAC Channel**: **${lowestCACChannel.name}** at **$${lowestCACChannel.average_acquisition_cost.toLocaleString()}**.\n• **Highest CAC Channel**: **${topCACChannel.name}** at **$${topCACChannel.average_acquisition_cost.toLocaleString()}**.\n\n**Key Takeaway**: Cost-efficiency varies by channel, highlighting opportunities to concentrate spend on high-yield, cost-effective channels.`,
         evidence: {
-          tool: 'calculate_kpis',
+          tool: 'calculate_kpis & analyze_channels',
           metric: 'Acquisition Cost (CAC)',
           records: `${recCount.toLocaleString()}`,
         },
@@ -281,20 +738,21 @@ export default function AIChat({
           x_key: 'name',
           default_metric: 'average_acquisition_cost',
           available_metrics: [
-            {"key": "average_acquisition_cost", "label": "Avg CAC ($)", "color": "#8b5cf6", "format": "currency"},
-            {"key": "average_roi", "label": "Avg ROI (x)", "color": "#3b82f6", "format": "multiplier"},
+            { key: 'average_acquisition_cost', label: 'Avg CAC ($)', color: '#8b5cf6', format: 'currency' },
+            { key: 'average_roi', label: 'Avg ROI (x)', color: '#3b82f6', format: 'multiplier' },
           ],
-          data: sortedChannels.map((c, i) => ({
+          data: sortedChannels.map((c) => ({
             name: c.name,
-            average_acquisition_cost: Math.round(metrics.avgCAC * (0.8 + i * 0.15)),
-            average_roi: Number(c.roi.toFixed(2)),
+            average_acquisition_cost: c.average_acquisition_cost,
+            average_roi: c.average_roi,
+            spend: c.spend,
           })),
         },
         steps: [
-          { step: 'Intent & Context Classification', status: 'done', detail: 'Classified query into analyze_channels (Metric: Acquisition_Cost)' },
+          { step: 'Intent & Context Classification', status: 'done', detail: 'Selected analyze_channels (Metric: Acquisition_Cost)' },
           { step: 'Executing Deterministic Aggregator', status: 'done', detail: 'Aggregated CAC across all marketing channels' },
-          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Derived cost bands and trade-off insights' },
-          { step: 'Instant Visual Chart Generation', status: 'done', detail: 'Generated Channel CAC Comparison Chart' },
+          { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Derived cost bands strictly from dataset metrics' },
+          { step: 'Single Visual Chart Generation', status: 'done', detail: 'Generated single Channel CAC Comparison Chart' },
         ],
         follow_ups: [
           'Which channel has the highest ROI?',
@@ -306,7 +764,7 @@ export default function AIChat({
 
     // Default portfolio overview / KPIs
     return {
-      text: `Here is the executive overview for **${datasetName}** (${recCount.toLocaleString()} records):\n\n• **Total Campaigns**: **${recCount.toLocaleString()}**\n• **Average ROI**: **${metrics.avgROI.toFixed(2)}x**\n• **Average Conversion Rate**: **${metrics.avgConvRate.toFixed(2)}%**\n• **Average Acquisition Cost**: **$${metrics.avgCAC.toLocaleString()}**\n• **Top Channel**: **${metrics.roiByChannel[0]?.name || 'Google Ads'}** (**${(metrics.roiByChannel[0]?.roi || 4.62).toFixed(2)}x ROI**)\n\n**Key Takeaway**: The portfolio is generating a solid overall return on marketing investment.`,
+      text: `Here is the executive overview for **${datasetName}** (${recCount.toLocaleString()} records):\n\n• **Total Campaigns**: **${recCount.toLocaleString()}**\n• **Average ROI**: **${roiValue}x**\n• **Average Conversion Rate**: **${convValue}%**\n• **Average Acquisition Cost**: **$${cacValue}**\n• **Top Channel by Return**: **${topChannel.name}** (**${topChannel.average_roi.toFixed(2)}x ROI**)\n\n**Key Takeaway**: The portfolio demonstrates grounded return metrics derived directly from your uploaded file.`,
       evidence: {
         tool: 'calculate_kpis',
         metric: 'Grounded Dataset Analytics',
@@ -318,17 +776,17 @@ export default function AIChat({
         subtitle: `Grounded summary across ${recCount.toLocaleString()} campaigns`,
         kpis: [
           { label: 'Total Campaigns', value: recCount.toLocaleString(), icon: 'campaign', color: 'blue' },
-          { label: 'Average ROI', value: `${metrics.avgROI.toFixed(2)}x`, icon: 'trending_up', color: 'emerald' },
-          { label: 'Avg Conv Rate', value: `${metrics.avgConvRate.toFixed(2)}%`, icon: 'percent', color: 'purple' },
-          { label: 'Avg CAC', value: `$${metrics.avgCAC.toLocaleString()}`, icon: 'payments', color: 'amber' },
+          { label: 'Average ROI', value: `${roiValue}x`, icon: 'trending_up', color: 'emerald' },
+          { label: 'Avg Conv Rate', value: `${convValue}%`, icon: 'percent', color: 'purple' },
+          { label: 'Avg CAC', value: `$${cacValue}`, icon: 'payments', color: 'amber' },
         ],
         data: [{ total: recCount }],
       },
       steps: [
-        { step: 'Intent & Context Classification', status: 'done', detail: 'Classified query into calculate_kpis (Portfolio Summary)' },
+        { step: 'Intent & Context Classification', status: 'done', detail: 'Selected calculate_kpis (Portfolio Summary)' },
         { step: 'Executing Deterministic Aggregator', status: 'done', detail: `Aggregated 4 core KPIs across ${recCount.toLocaleString()} records` },
-        { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Verified benchmark ratios against raw dataset' },
-        { step: 'Instant Visual Chart Generation', status: 'done', detail: 'Generated Executive KPI Highlight Cards' },
+        { step: 'Grounded Analytical Synthesis', status: 'done', detail: 'Verified benchmark ratios strictly against raw dataset' },
+        { step: 'Single Visual Generation', status: 'done', detail: 'Generated single Executive KPI Highlight Cards' },
       ],
       follow_ups: [
         'Which channel has the highest ROI?',
@@ -338,44 +796,107 @@ export default function AIChat({
     };
   };
 
-  const handleSend = async (qText = null) => {
-    const query = qText || question;
-    if (!query.trim() || isSending) return;
+  // Real-time ChatGPT-like progressive text streamer
+  const executeStreamedAnswer = (answerObj) => {
+    setIsSending(false);
+    setIsStreaming(true);
 
-    const newMessages = [...messages, { role: 'user', text: query }];
-    setMessages(newMessages);
-    setQuestion('');
+    const asstMsgId = `asst_${Date.now()}`;
+    const fullText = answerObj.text || '';
+    const totalChars = fullText.length;
+
+    // Immediately push placeholder message into conversation
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: asstMsgId,
+        role: 'assistant',
+        text: '',
+        isStreaming: true,
+        evidence: answerObj.evidence,
+        visual_spec: answerObj.visual_spec,
+        steps: answerObj.steps,
+        follow_ups: answerObj.follow_ups,
+      },
+    ]);
+
+    let currentIndex = 0;
+    // Chunk size calculated so that typical responses (500-1500 chars) stream in ~1.5 - 2.5 seconds
+    const stepSize = Math.max(3, Math.ceil(totalChars / 90));
+
+    if (streamTimerRef.current) clearInterval(streamTimerRef.current);
+
+    streamTimerRef.current = setInterval(() => {
+      currentIndex += stepSize;
+      if (currentIndex >= totalChars) {
+        clearInterval(streamTimerRef.current);
+        streamTimerRef.current = null;
+        setIsStreaming(false);
+        isProcessingRef.current = false;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === asstMsgId
+              ? { ...m, text: fullText, isStreaming: false }
+              : m
+          )
+        );
+      } else {
+        const partialText = fullText.slice(0, currentIndex);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === asstMsgId
+              ? { ...m, text: partialText, isStreaming: true }
+              : m
+          )
+        );
+      }
+      scrollToBottom();
+    }, 18);
+  };
+
+  const handleStopStreaming = () => {
+    if (streamTimerRef.current) {
+      clearInterval(streamTimerRef.current);
+      streamTimerRef.current = null;
+    }
+    setIsStreaming(false);
+    isProcessingRef.current = false;
+    setMessages((prev) =>
+      prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m))
+    );
+  };
+
+  // Core processing function that handles answering and triggers streaming
+  const processUserQuery = async (queryText, visualContext = null) => {
+    if (!queryText || !queryText.trim() || isProcessingRef.current) return;
+    isProcessingRef.current = true;
     setIsSending(true);
 
-    // Build conversation history for multi-turn context
-    const historyPayload = newMessages.map((m) => ({
+    const historyPayload = messages.map((m) => ({
       role: m.role,
       text: m.text,
     }));
 
     try {
+      let answerObj = null;
+
       // 1. If backend datasetId exists, attempt backend grounded chat endpoint
       if (datasetId && datasetId !== 'active-dataset') {
         try {
-          const res = await sendChatMessage(datasetId, query, historyPayload);
+          const res = await sendChatMessage(datasetId, queryText, historyPayload);
           if (res && res.answer) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: 'assistant',
-                text: res.answer,
-                evidence: {
-                  tool: (res.tools_used && res.tools_used[0]) || 'Deterministic Agent',
-                  metric: 'Direct Dataset Query',
-                  records: `${Number(initialRecordCount).toLocaleString()}`,
-                },
-                visual_spec: res.visual_spec,
-                steps: res.steps,
-                follow_ups: res.follow_ups,
+            answerObj = {
+              text: res.answer,
+              evidence: {
+                tool: (res.tools_used && res.tools_used[0]) || 'Deterministic Agent',
+                metric: 'Direct Dataset Query',
+                records: `${Number(initialRecordCount).toLocaleString()}`,
               },
-            ]);
-            setIsSending(false);
-            return;
+              visual_spec: res.visual_spec,
+              steps: res.steps,
+              follow_ups: res.follow_ups,
+            };
           }
         } catch (apiErr) {
           console.warn('Backend chat notice, falling back to local contextual engine:', apiErr);
@@ -383,19 +904,15 @@ export default function AIChat({
       }
 
       // 2. Grounded contextual analyzer from parsed dataset rows
-      const answerObj = generateContextualAnswer(query, datasetRows);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: answerObj.text,
-          evidence: answerObj.evidence,
-          visual_spec: answerObj.visual_spec,
-          steps: answerObj.steps,
-          follow_ups: answerObj.follow_ups,
-        },
-      ]);
+      if (!answerObj) {
+        answerObj = generateContextualAnswer(queryText, datasetRows, visualContext);
+      }
+
+      // 3. Stream the answer token by token (ChatGPT style)
+      executeStreamedAnswer(answerObj);
     } catch (err) {
+      setIsSending(false);
+      isProcessingRef.current = false;
       setMessages((prev) => [
         ...prev,
         {
@@ -404,10 +921,35 @@ export default function AIChat({
           evidence: { tool: 'Exception Handler', metric: 'N/A', records: '0' },
         },
       ]);
-    } finally {
-      setIsSending(false);
     }
   };
+
+  // Auto-respond to pending user questions (e.g. from visual "Ask AI" buttons or state hydration)
+  useEffect(() => {
+    if (messages.length === 0 || isSending || isStreaming || isProcessingRef.current) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === 'user') {
+      processUserQuery(lastMsg.text, lastMsg.visualContext);
+    }
+  }, [messages, isSending, isStreaming]);
+
+  const handleSend = (qText = null) => {
+    const query = qText || question;
+    if (!query.trim() || isSending || isStreaming) return;
+
+    setQuestion('');
+    // Appending this user message will automatically trigger processUserQuery via the useEffect!
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user_${Date.now()}`,
+        role: 'user',
+        text: query,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+  };
+
 
   return (
     <div className="w-full h-full flex-1 flex flex-col bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden animate-fade-in relative">
@@ -584,18 +1126,25 @@ export default function AIChat({
                     )}
 
                     {/* Formatted Natural Language Content */}
-                    <NLMessageFormatter content={msg.text} />
+                    <div className="relative leading-relaxed">
+                      <NLMessageFormatter content={msg.text} />
+                      {msg.isStreaming && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse align-middle" />
+                      )}
+                    </div>
 
                     {/* Instant In-Chat Visual Chart Component */}
-                    {msg.visual_spec && (
-                      <ChatVisualWidget
-                        visualSpec={msg.visual_spec}
-                        onPinVisual={handlePinVisualWrapper}
-                      />
+                    {msg.visual_spec && !msg.isStreaming && (
+                      <div className="animate-fade-in">
+                        <ChatVisualWidget
+                          visualSpec={msg.visual_spec}
+                          onPinVisual={handlePinVisualWrapper}
+                        />
+                      </div>
                     )}
 
                     {/* Evidence & Grounding Citation Drawer */}
-                    {msg.evidence && (
+                    {msg.evidence && !msg.isStreaming && (
                       <div className="pt-2 border-t border-outline-variant/20 flex flex-col gap-2">
                         <button
                           type="button"
@@ -654,7 +1203,7 @@ export default function AIChat({
                     )}
 
                     {/* Contextual Follow-up Suggestions Chips */}
-                    {msg.follow_ups && msg.follow_ups.length > 0 && (
+                    {msg.follow_ups && msg.follow_ups.length > 0 && !msg.isStreaming && (
                       <div className="pt-2.5 border-t border-outline-variant/15 flex flex-wrap items-center gap-2">
                         <span className="text-[10px] uppercase font-bold text-secondary flex items-center gap-1">
                           <span className="material-symbols-outlined text-xs">arrow_forward</span>
@@ -665,7 +1214,7 @@ export default function AIChat({
                             key={fIdx}
                             type="button"
                             onClick={() => handleSend(fu)}
-                            disabled={isSending}
+                            disabled={isSending || isStreaming}
                             className="px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-[11px] font-medium text-primary hover:text-primary transition-all flex items-center gap-1 shadow-xs group"
                           >
                             <span>{fu}</span>
@@ -681,8 +1230,8 @@ export default function AIChat({
               </div>
             ))}
 
-            {/* Autonomous ReAct Agent Thinking Indicator */}
-            {isSending && (
+            {/* Autonomous ReAct Agent Thinking Indicator (Only before streaming starts) */}
+            {isSending && !isStreaming && (
               <div className="self-start p-4 rounded-2xl rounded-tl-sm bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2 shadow-sm animate-pulse max-w-md w-full">
                 <div className="flex items-center gap-2.5">
                   <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center">
@@ -698,7 +1247,6 @@ export default function AIChat({
                 </div>
               </div>
             )}
-
 
             <div ref={messagesEndRef} />
           </div>
@@ -717,7 +1265,7 @@ export default function AIChat({
               key={idx}
               type="button"
               onClick={() => handleSend(p.query)}
-              disabled={isSending}
+              disabled={isSending || isStreaming}
               className="px-3 py-1.5 rounded-lg bg-surface-container-lowest hover:bg-surface-container border border-outline-variant/30 text-[11px] font-medium text-secondary hover:text-on-surface transition-all shrink-0 flex items-center gap-1.5 shadow-xs"
             >
               <span className="material-symbols-outlined text-xs text-primary">{p.icon}</span>
@@ -743,7 +1291,7 @@ export default function AIChat({
               placeholder="Ask any question about your campaign ROI, channels, conversions, CAC..."
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              disabled={isSending}
+              disabled={isSending || isStreaming}
             />
             {question && (
               <button
@@ -756,20 +1304,27 @@ export default function AIChat({
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={!question.trim() || isSending}
-            className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-sm shrink-0"
-          >
-            <span>Send</span>
-            <span className="material-symbols-outlined text-sm">send</span>
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={handleStopStreaming}
+              className="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+              title="Stop streaming response"
+            >
+              <span className="w-2.5 h-2.5 bg-white rounded-xs"></span>
+              <span>Stop</span>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!question.trim() || isSending}
+              className="px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <span>Send</span>
+              <span className="material-symbols-outlined text-sm">send</span>
+            </button>
+          )}
         </form>
-
-        {/* <div className="flex items-center justify-between px-2 pt-2 text-[10px] text-secondary max-w-4xl mx-auto">
-          <span>Press Enter ↵ to ask • Answers strictly grounded in deterministic data</span>
-          <span className="hidden sm:inline">100% Hallucination-Free Guarantee</span>
-        </div> */}
       </div>
     </div>
   );

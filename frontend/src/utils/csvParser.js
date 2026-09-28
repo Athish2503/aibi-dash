@@ -121,20 +121,22 @@ export function computeDatasetMetrics(rows) {
     return DEFAULT_METRICS;
   }
 
-  // Identify key columns
+  // Identify key columns dynamically with flexible regex matching
   const first = rows[0];
   const keys = Object.keys(first);
 
-  const channelCol = keys.find((k) => /channel/i.test(k)) || 'Channel_Used';
-  const roiCol = keys.find((k) => /^roi$/i.test(k) || /roi/i.test(k)) || 'ROI';
+  const channelCol = keys.find((k) => /channel|platform|source|medium/i.test(k)) || 'Channel_Used';
+  const roiCol = keys.find((k) => /^roi$/i.test(k) || /roi|return/i.test(k)) || 'ROI';
   const convCol = keys.find((k) => /conv/i.test(k)) || 'Conversion_Rate';
-  const costCol = keys.find((k) => /cost/i.test(k) || /spend/i.test(k) || /cac/i.test(k)) || 'Acquisition_Cost';
-  const audCol = keys.find((k) => /audience/i.test(k)) || 'Target_Audience';
-  const typeCol = keys.find((k) => /type/i.test(k)) || 'Campaign_Type';
-  const locCol = keys.find((k) => /loc/i.test(k) || /region/i.test(k)) || 'Location';
-  const durCol = keys.find((k) => /duration/i.test(k)) || 'Duration';
+  const costCol = keys.find((k) => /cost|spend|cac|budget/i.test(k)) || 'Acquisition_Cost';
+  const audCol = keys.find((k) => /aud|segment|target/i.test(k)) || 'Target_Audience';
+  const typeCol = keys.find((k) => /type|format|category/i.test(k)) || 'Campaign_Type';
+  const locCol = keys.find((k) => /loc|region|country|geo/i.test(k)) || 'Location';
+  const durCol = keys.find((k) => /dur|day|length/i.test(k)) || 'Duration';
   const impCol = keys.find((k) => /impression/i.test(k)) || 'Impressions';
   const clickCol = keys.find((k) => /click/i.test(k)) || 'Clicks';
+  const idCol = keys.find((k) => /id|campaign/i.test(k)) || 'Campaign_ID';
+  const compCol = keys.find((k) => /comp|brand/i.test(k)) || 'Company';
 
   // Overall sums
   let sumROI = 0;
@@ -155,21 +157,26 @@ export function computeDatasetMetrics(rows) {
   const cacPoints = [];
 
   rows.forEach((r) => {
-    const roi = typeof r[roiCol] === 'number' ? r[roiCol] : parseFloat(r[roiCol]);
-    const conv = typeof r[convCol] === 'number' ? r[convCol] : parseFloat(r[convCol]);
-    const cost = typeof r[costCol] === 'number' ? r[costCol] : parseFloat(r[costCol]);
+    const rawRoi = typeof r[roiCol] === 'number' ? r[roiCol] : parseFloat(r[roiCol]);
+    const rawConv = typeof r[convCol] === 'number' ? r[convCol] : parseFloat(r[convCol]);
+    const rawCost = typeof r[costCol] === 'number' ? r[costCol] : parseFloat(r[costCol]);
     const imp = typeof r[impCol] === 'number' ? r[impCol] : parseFloat(r[impCol]);
     const clk = typeof r[clickCol] === 'number' ? r[clickCol] : parseFloat(r[clickCol]);
 
-    if (!isNaN(roi)) {
+    const roi = !isNaN(rawRoi) ? rawRoi : null;
+    // Normalize decimal conversion rate (e.g. 0.085 -> 8.5%)
+    const conv = !isNaN(rawConv) ? (rawConv > 0 && rawConv <= 1.0 ? rawConv * 100 : rawConv) : null;
+    const cost = !isNaN(rawCost) ? rawCost : null;
+
+    if (roi !== null) {
       sumROI += roi;
       countROI++;
     }
-    if (!isNaN(conv)) {
+    if (conv !== null) {
       sumConv += conv;
       countConv++;
     }
-    if (!isNaN(cost)) {
+    if (cost !== null) {
       sumCost += cost;
       countCost++;
     }
@@ -178,115 +185,247 @@ export function computeDatasetMetrics(rows) {
 
     // Channel
     const ch = String(r[channelCol] || 'Other');
-    if (!channelMap[ch]) channelMap[ch] = { sumROI: 0, countROI: 0, cost: 0 };
-    if (!isNaN(roi)) {
+    if (!channelMap[ch]) {
+      channelMap[ch] = { sumROI: 0, countROI: 0, sumConv: 0, countConv: 0, sumCost: 0, countCost: 0, count: 0 };
+    }
+    channelMap[ch].count++;
+    if (roi !== null) {
       channelMap[ch].sumROI += roi;
       channelMap[ch].countROI++;
     }
-    if (!isNaN(cost)) channelMap[ch].cost += cost;
+    if (conv !== null) {
+      channelMap[ch].sumConv += conv;
+      channelMap[ch].countConv++;
+    }
+    if (cost !== null) {
+      channelMap[ch].sumCost += cost;
+      channelMap[ch].countCost++;
+    }
 
     // Audience
     const aud = String(r[audCol] || 'Other');
-    if (!audMap[aud]) audMap[aud] = { sumConv: 0, countConv: 0, sumROI: 0, countROI: 0 };
-    if (!isNaN(conv)) {
+    if (!audMap[aud]) {
+      audMap[aud] = { sumConv: 0, countConv: 0, sumROI: 0, countROI: 0, sumCost: 0, countCost: 0, count: 0 };
+    }
+    audMap[aud].count++;
+    if (conv !== null) {
       audMap[aud].sumConv += conv;
       audMap[aud].countConv++;
     }
-    if (!isNaN(roi)) {
+    if (roi !== null) {
       audMap[aud].sumROI += roi;
       audMap[aud].countROI++;
+    }
+    if (cost !== null) {
+      audMap[aud].sumCost += cost;
+      audMap[aud].countCost++;
     }
 
     // Type
     const cType = String(r[typeCol] || 'Other');
-    if (!typeMap[cType]) typeMap[cType] = { sumROI: 0, countROI: 0 };
-    if (!isNaN(roi)) {
+    if (!typeMap[cType]) {
+      typeMap[cType] = { sumROI: 0, countROI: 0, sumConv: 0, countConv: 0, sumCost: 0, countCost: 0, count: 0 };
+    }
+    typeMap[cType].count++;
+    if (roi !== null) {
       typeMap[cType].sumROI += roi;
       typeMap[cType].countROI++;
+    }
+    if (conv !== null) {
+      typeMap[cType].sumConv += conv;
+      typeMap[cType].countConv++;
+    }
+    if (cost !== null) {
+      typeMap[cType].sumCost += cost;
+      typeMap[cType].countCost++;
     }
 
     // Geo / Location
     const geo = String(r[locCol] || 'Other');
-    if (!geoMap[geo]) geoMap[geo] = { sumROI: 0, countROI: 0, cost: 0 };
-    if (!isNaN(roi)) {
+    if (!geoMap[geo]) {
+      geoMap[geo] = { sumROI: 0, countROI: 0, sumConv: 0, countConv: 0, sumCost: 0, countCost: 0, count: 0 };
+    }
+    geoMap[geo].count++;
+    if (roi !== null) {
       geoMap[geo].sumROI += roi;
       geoMap[geo].countROI++;
     }
-    if (!isNaN(cost)) geoMap[geo].cost += cost;
+    if (conv !== null) {
+      geoMap[geo].sumConv += conv;
+      geoMap[geo].countConv++;
+    }
+    if (cost !== null) {
+      geoMap[geo].sumCost += cost;
+      geoMap[geo].countCost++;
+    }
 
     // Duration
-    const dur = String(r[durCol] || '30 Days');
-    if (!durMap[dur]) durMap[dur] = { sumROI: 0, countROI: 0, sumConv: 0, countConv: 0, cost: 0 };
-    if (!isNaN(roi)) {
+    const durRaw = String(r[durCol] || '30');
+    const durMatch = durRaw.match(/\d+/);
+    const dur = durMatch ? `${durMatch[0]} Days` : durRaw;
+    if (!durMap[dur]) {
+      durMap[dur] = { sumROI: 0, countROI: 0, sumConv: 0, countConv: 0, sumCost: 0, countCost: 0, count: 0 };
+    }
+    durMap[dur].count++;
+    if (roi !== null) {
       durMap[dur].sumROI += roi;
       durMap[dur].countROI++;
     }
-    if (!isNaN(conv)) {
+    if (conv !== null) {
       durMap[dur].sumConv += conv;
       durMap[dur].countConv++;
     }
-    if (!isNaN(cost)) durMap[dur].cost += cost;
+    if (cost !== null) {
+      durMap[dur].sumCost += cost;
+      durMap[dur].countCost++;
+    }
 
     // Scatter point
-    if (!isNaN(cost) && !isNaN(roi)) {
+    if (cost !== null && roi !== null) {
       cacPoints.push({
         cac: Math.round(cost),
         roi: Number(roi.toFixed(2)),
-        name: String(r['Campaign_ID'] || r['Company'] || 'Campaign'),
+        name: String(r[idCol] || r[compCol] || 'Campaign'),
         channel: ch,
       });
     }
   });
 
-  const avgROI = countROI > 0 ? Number((sumROI / countROI).toFixed(2)) : 4.82;
-  const avgConvRate = countConv > 0 ? Number((sumConv / countConv).toFixed(1)) : 8.4;
-  const avgCAC = countCost > 0 ? Math.round(sumCost / countCost) : 4250;
+  const avgROI = countROI > 0 ? Number((sumROI / countROI).toFixed(2)) : 0.0;
+  const avgConvRate = countConv > 0 ? Number((sumConv / countConv).toFixed(2)) : 0.0;
+  const avgCAC = countCost > 0 ? Math.round(sumCost / countCost) : 0;
   const totalSpend = Math.round(sumCost > 0 ? sumCost : avgCAC * rows.length);
-  const totalImpressions = sumImp > 0 ? sumImp : Math.round(totalSpend * 5.7);
-  const totalClicks = sumClicks > 0 ? sumClicks : Math.round(totalImpressions * 0.05);
+  const totalImpressions = sumImp > 0 ? sumImp : 0;
+  const totalClicks = sumClicks > 0 ? sumClicks : 0;
   const totalConversions = Math.round(totalClicks * (avgConvRate / 100));
 
-  const roiByChannel = Object.entries(channelMap).map(([name, data]) => ({
-    name,
-    roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-    spend: Math.round(data.cost),
-  }));
+  const totalAllSpend = Math.max(1, Object.values(channelMap).reduce((acc, d) => acc + d.sumCost, 0));
 
-  const spendByChannel = Object.entries(channelMap).map(([name, data]) => ({
-    name,
-    spend: Math.round(data.cost),
-    roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-  })).sort((a, b) => b.spend - a.spend);
+  const roiByChannel = Object.entries(channelMap).map(([name, data]) => {
+    const roi = data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0;
+    const conv = data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0;
+    const cac = data.countCost > 0 ? Math.round(data.sumCost / data.countCost) : 0;
+    const spend = Math.round(data.sumCost);
+    const share = Math.round((spend / totalAllSpend) * 100);
+    return {
+      name,
+      roi,
+      average_roi: roi,
+      conv,
+      average_conversion_rate: conv,
+      cac,
+      average_acquisition_cost: cac,
+      spend,
+      share,
+      campaign_count: data.count,
+    };
+  }).sort((a, b) => b.roi - a.roi);
+
+  const spendByChannel = [...roiByChannel].sort((a, b) => b.spend - a.spend);
 
   const spendByLocation = Object.entries(geoMap).map(([name, data]) => ({
     name,
-    spend: Math.round(data.cost),
+    spend: Math.round(data.sumCost),
     roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
+    conv: data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0,
+    cac: data.countCost > 0 ? Math.round(data.sumCost / data.countCost) : 0,
+    campaign_count: data.count,
   })).sort((a, b) => b.spend - a.spend);
 
-  const durationTrends = Object.entries(durMap).map(([duration, data]) => ({
-    duration,
-    spend: Math.round(data.cost),
-    roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-    conv: data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(1)) : 0,
-  }));
+  const durationTrends = Object.entries(durMap).map(([duration, data]) => {
+    const roi = data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0;
+    const conv = data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0;
+    const cac = data.countCost > 0 ? Math.round(data.sumCost / data.countCost) : 0;
+    return {
+      name: duration,
+      duration,
+      spend: Math.round(data.sumCost),
+      roi,
+      average_roi: roi,
+      conv,
+      average_conversion_rate: conv,
+      cac,
+      average_acquisition_cost: cac,
+      campaign_count: data.count,
+    };
+  }).sort((a, b) => {
+    const numA = parseInt(a.duration, 10) || 0;
+    const numB = parseInt(b.duration, 10) || 0;
+    return numA - numB;
+  });
 
-  const convByAudience = Object.entries(audMap).map(([name, data]) => ({
-    name,
-    conv: data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(1)) : 0,
-    roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-  }));
+  const convByAudience = Object.entries(audMap).map(([name, data]) => {
+    const conv = data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0;
+    const roi = data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0;
+    const cac = data.countCost > 0 ? Math.round(data.sumCost / data.countCost) : 0;
+    return {
+      name,
+      conv,
+      average_conversion_rate: conv,
+      roi,
+      average_roi: roi,
+      cac,
+      average_acquisition_cost: cac,
+      spend: Math.round(data.sumCost),
+      campaign_count: data.count,
+    };
+  }).sort((a, b) => b.conv - a.conv);
 
-  const campaignType = Object.entries(typeMap).map(([name, data]) => ({
-    name,
-    roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-  }));
+  const campaignType = Object.entries(typeMap).map(([name, data]) => {
+    const roi = data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0;
+    const conv = data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0;
+    const cac = data.countCost > 0 ? Math.round(data.sumCost / data.countCost) : 0;
+    const share = Math.round((data.count / rows.length) * 100);
+    return {
+      name,
+      roi,
+      average_roi: roi,
+      conv,
+      average_conversion_rate: conv,
+      cac,
+      average_acquisition_cost: cac,
+      campaign_count: data.count,
+      share,
+    };
+  }).sort((a, b) => b.campaign_count - a.campaign_count);
 
   const geoPerformance = Object.entries(geoMap).map(([region, data]) => ({
     region,
+    name: region,
     roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
-    rev: `$${((data.cost || 100000) / 1000000).toFixed(1)}M`,
-  }));
+    average_roi: data.countROI > 0 ? Number((data.sumROI / data.countROI).toFixed(2)) : 0,
+    conv: data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0,
+    average_conversion_rate: data.countConv > 0 ? Number((data.sumConv / data.countConv).toFixed(2)) : 0,
+    rev: `$${(data.sumCost / 1000).toFixed(0)}K`,
+    spend: Math.round(data.sumCost),
+    campaign_count: data.count,
+  })).sort((a, b) => b.roi - a.roi);
+
+  // Real top campaigns sorted by ROI descending
+  const topCampaigns = [...rows]
+    .map((r, i) => {
+      const rawRoi = typeof r[roiCol] === 'number' ? r[roiCol] : parseFloat(r[roiCol]);
+      const rawConv = typeof r[convCol] === 'number' ? r[convCol] : parseFloat(r[convCol]);
+      const rawCost = typeof r[costCol] === 'number' ? r[costCol] : parseFloat(r[costCol]);
+      const roi = !isNaN(rawRoi) ? Number(rawRoi.toFixed(2)) : 0;
+      const conv = !isNaN(rawConv) ? Number((rawConv > 0 && rawConv <= 1.0 ? rawConv * 100 : rawConv).toFixed(2)) : 0;
+      const cost = !isNaN(rawCost) ? Math.round(rawCost) : 0;
+      return {
+        id: String(r[idCol] || `CMP-${100 + i}`),
+        company: String(r[compCol] || ''),
+        channel: String(r[channelCol] || 'Other'),
+        roi,
+        ROI: roi,
+        average_roi: roi,
+        conv,
+        Conversion_Rate: conv,
+        average_conversion_rate: conv,
+        cost,
+        Acquisition_Cost: cost,
+        average_acquisition_cost: cost,
+      };
+    })
+    .sort((a, b) => b.roi - a.roi);
 
   return {
     totalCampaigns: rows.length,
@@ -297,13 +436,14 @@ export function computeDatasetMetrics(rows) {
     totalImpressions,
     totalClicks,
     totalConversions,
-    roiByChannel: roiByChannel.length > 0 ? roiByChannel : DEFAULT_METRICS.roiByChannel,
-    spendByChannel: spendByChannel.length > 0 ? spendByChannel : DEFAULT_METRICS.spendByChannel,
-    spendByLocation: spendByLocation.length > 0 ? spendByLocation : DEFAULT_METRICS.spendByLocation,
-    durationTrends: durationTrends.length > 0 ? durationTrends : DEFAULT_METRICS.durationTrends,
-    convByAudience: convByAudience.length > 0 ? convByAudience : DEFAULT_METRICS.convByAudience,
-    cacVsRoi: cacPoints.length > 0 ? cacPoints.slice(0, 30) : DEFAULT_METRICS.cacVsRoi,
-    campaignType: campaignType.length > 0 ? campaignType : DEFAULT_METRICS.campaignType,
-    geoPerformance: geoPerformance.length > 0 ? geoPerformance : DEFAULT_METRICS.geoPerformance,
+    roiByChannel,
+    spendByChannel,
+    spendByLocation,
+    durationTrends,
+    convByAudience,
+    cacVsRoi: cacPoints.length > 0 ? cacPoints.slice(0, 30) : [],
+    campaignType,
+    geoPerformance,
+    topCampaigns,
   };
 }
