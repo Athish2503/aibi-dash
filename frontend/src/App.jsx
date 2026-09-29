@@ -16,6 +16,8 @@ import {
   generateDashboardPlan,
   generatePowerBIProject,
   buildBISolution,
+  getAvailableModels,
+  switchActiveModel,
 } from './services/api';
 
 export default function App() {
@@ -30,22 +32,55 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Global AI Model Management
+  const [availableModels, setAvailableModels] = useState([]);
+  const [activeModel, setActiveModel] = useState({ provider: 'ollama', model: 'llama3.2:1b' });
+  const [ollamaOnline, setOllamaOnline] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  // Check health on mount
+  // Check health and available models on mount
   useEffect(() => {
-    async function loadHealth() {
+    async function loadHealthAndModels() {
       try {
         const h = await checkHealth();
         setHealth(h);
       } catch (err) {
         console.error('Health check error:', err);
       }
+
+      try {
+        const m = await getAvailableModels();
+        if (m?.models) {
+          setAvailableModels(m.models);
+          setActiveModel({
+            provider: m.active_provider || 'ollama',
+            model: m.active_model || 'llama3.2:1b',
+          });
+          setOllamaOnline(Boolean(m.ollama_online));
+        }
+      } catch (err) {
+        console.warn('Could not query AI models:', err);
+      }
     }
-    loadHealth();
+    loadHealthAndModels();
   }, []);
+
+  const handleSwitchModel = async (provider, model) => {
+    try {
+      const res = await switchActiveModel(provider, model);
+      if (res?.config) {
+        setActiveModel(res.config);
+      } else {
+        setActiveModel({ provider, model });
+      }
+    } catch (err) {
+      console.error('Failed to switch model:', err);
+      setErrorMessage(`Failed to switch AI model: ${err.message}`);
+    }
+  };
 
   // Step 1: Upload & Analyze Dataset
   const handleUploadComplete = async (file, rows = []) => {
@@ -238,6 +273,10 @@ export default function App() {
         health={health}
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        activeModel={activeModel}
+        availableModels={availableModels}
+        ollamaOnline={ollamaOnline}
+        onSwitchModel={handleSwitchModel}
       />
 
       {/* Simplified 5-item Sidebar */}
@@ -370,6 +409,10 @@ export default function App() {
                 messages={chatMessages}
                 setMessages={setChatMessages}
                 onPinVisual={handlePinVisualToPlan}
+                activeModel={activeModel}
+                availableModels={availableModels}
+                ollamaOnline={ollamaOnline}
+                onSwitchModel={handleSwitchModel}
               />
             )}
 

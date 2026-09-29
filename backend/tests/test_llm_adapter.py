@@ -54,3 +54,33 @@ def test_get_llm_adapter_factory():
 
     with pytest.raises(ValueError):
         get_llm_adapter("unknown_provider")
+
+
+def test_ollama_adapter_and_runtime_switching():
+    from backend.app.agent.llm_adapter import (
+        OllamaAdapter,
+        set_runtime_model,
+        get_runtime_model,
+        get_available_models,
+    )
+    # Test adapter instantiation
+    ollama = OllamaAdapter(model="llama3.2:1b")
+    assert ollama.model == "llama3.2:1b"
+    assert "11434" in ollama.base_url
+
+    # Test factory with ollama
+    ollama_from_factory = get_llm_adapter("ollama", "llama3.2:1b")
+    assert isinstance(ollama_from_factory, OllamaAdapter)
+
+    # Test runtime switching
+    set_runtime_model("ollama", "llama3.2:1b")
+    current = get_runtime_model()
+    assert current["provider"] == "ollama"
+    assert current["model"] == "llama3.2:1b"
+
+    # Test model listing
+    models_info = get_available_models()
+    assert "models" in models_info
+    assert any("llama" in m["id"].lower() for m in models_info["models"])
+    assert models_info["active_provider"] == "ollama"
+

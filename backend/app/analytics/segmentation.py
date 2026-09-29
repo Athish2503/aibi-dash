@@ -230,3 +230,6 @@ def rank_campaigns(
         output.append(rec)
 
     return output
+
+
+rank_performers = rank_campaigns

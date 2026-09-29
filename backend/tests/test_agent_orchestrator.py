@@ -183,3 +183,22 @@ def test_visual_spec_gauge_generation(sample_df):
     assert response.visual_spec["type"] == "gauge"
     assert response.visual_spec["targetValue"] == 5.0
 
+
+def test_parse_intent_investigate_root_cause():
+    orchestrator = AgentOrchestrator()
+    intent = orchestrator.parse_intent("Why did ROI fall in North America")
+    assert intent.tool_name == "investigate_root_cause"
+    assert intent.filters.get("Location") == "North America"
+    assert intent.metric == "ROI"
+
+
+def test_investigate_root_cause_grounded_execution(sample_df):
+    from backend.app.agent.llm_adapter import MockLLMAdapter
+    orchestrator = AgentOrchestrator(llm_adapter=MockLLMAdapter())
+    response = orchestrator.answer_natural_language_query("Why did ROI fall in North America", sample_df)
+    assert "investigate_root_cause" in response.tools_used
+    assert response.filters_applied.get("Location") == "North America"
+    assert "Diagnostic Root Cause Analysis" in response.answer
+    assert response.visual_spec is not None
+    assert len(response.follow_ups) > 0
+

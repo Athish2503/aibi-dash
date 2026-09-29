@@ -277,6 +277,106 @@ def _register_builtin_tools(registry: ToolRegistry):
         },
     )(detect_anomalies)
 
+    def investigate_root_cause(
+        df: Any,
+        metric: str = "ROI",
+        filters: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """
+        Deterministically diagnoses why a metric (e.g. ROI) fell, dropped, or shifted,
+        comparing the target filtered segment against the broader portfolio benchmark
+        and isolating channel, audience, or geographic drags.
+        """
+        if df is None or len(df) == 0:
+            return {"error": "Empty dataset"}
+
+        active_filters = dict(filters or {})
+        loc_val = active_filters.get("Location")
+        work_df = df.copy()
+
+        # Handle North America alias mapping if Location is in dataset
+        if loc_val and str(loc_val).lower() in ("north america", "us", "usa", "united states"):
+            us_cities = {"new york", "los angeles", "chicago", "miami", "houston", "san francisco", "dallas"}
+            if "Location" in work_df.columns:
+                df_cities = set(work_df["Location"].dropna().astype(str).str.lower().unique())
+                if df_cities.intersection(us_cities):
+                    matching_cities = [c for c in work_df["Location"].dropna().unique() if str(c).lower() in us_cities]
+                    active_filters["Location"] = matching_cities
+
+        try:
+            from backend.app.analytics.segmentation import apply_filters, analyze_channels, analyze_geography
+            from backend.app.analytics.kpis import calculate_kpis
+        except ImportError:
+            from app.analytics.segmentation import apply_filters, analyze_channels, analyze_geography
+            from app.analytics.kpis import calculate_kpis
+
+        filtered_df = apply_filters(work_df, active_filters)
+        if filtered_df.empty:
+            filtered_df = work_df
+
+        segment_kpis = calculate_kpis(filtered_df)
+        portfolio_kpis = calculate_kpis(work_df)
+
+        seg_roi = segment_kpis.get("average_roi", 0.0)
+        port_roi = portfolio_kpis.get("average_roi", 0.0)
+        roi_var_pct = round(((seg_roi - port_roi) / port_roi) * 100, 2) if port_roi else 0.0
+
+        seg_cac = segment_kpis.get("average_acquisition_cost", 0.0)
+        port_cac = portfolio_kpis.get("average_acquisition_cost", 0.0)
+        cac_var_pct = round(((seg_cac - port_cac) / port_cac) * 100, 2) if port_cac else 0.0
+
+        seg_cvr = segment_kpis.get("average_conversion_rate", 0.0)
+        port_cvr = portfolio_kpis.get("average_conversion_rate", 0.0)
+        cvr_var_pct = round(((seg_cvr - port_cvr) / port_cvr) * 100, 2) if port_cvr else 0.0
+
+        seg_channels = analyze_channels(filtered_df)
+        lowest_channel = seg_channels[-1] if seg_channels else None
+        top_channel = seg_channels[0] if seg_channels else None
+
+        geo_breakdown = analyze_geography(filtered_df) if "Location" in filtered_df.columns else []
+        lowest_geo = geo_breakdown[-1] if geo_breakdown else None
+
+        primary_drag = lowest_channel.get("Channel_Used") if lowest_channel else "Unknown"
+        secondary_drag = lowest_geo.get("Location") if lowest_geo and len(geo_breakdown) > 1 else None
+
+        lagging_location_channels = []
+        if secondary_drag and "Location" in filtered_df.columns:
+            lag_df = filtered_df[filtered_df["Location"] == secondary_drag]
+            if not lag_df.empty:
+                lagging_location_channels = analyze_channels(lag_df)
+
+        return {
+            "focus_segment": loc_val or (list(filters.values())[0] if filters else "Portfolio"),
+            "target_metric": metric,
+            "segment_kpis": segment_kpis,
+            "portfolio_kpis": portfolio_kpis,
+            "roi_variance_pct": roi_var_pct,
+            "cac_variance_pct": cac_var_pct,
+            "cvr_variance_pct": cvr_var_pct,
+            "primary_channel_drag": primary_drag,
+            "lowest_channel_roi": lowest_channel.get("average_roi", 0.0) if lowest_channel else 0.0,
+            "top_channel": top_channel.get("Channel_Used") if top_channel else "Unknown",
+            "top_channel_roi": top_channel.get("average_roi", 0.0) if top_channel else 0.0,
+            "lowest_location": secondary_drag,
+            "lowest_location_roi": lowest_geo.get("average_roi", 0.0) if lowest_geo else 0.0,
+            "lagging_location_channels": lagging_location_channels,
+            "channels_in_segment": seg_channels,
+            "locations_in_segment": geo_breakdown[:5],
+        }
+
+    registry.register(
+        name="investigate_root_cause",
+        description="Diagnoses why metrics dropped, fell, or shifted in a segment, analyzing channel drag, geographic variance, and CAC/conversion drivers.",
+        category="analytics",
+        parameters={
+            "type": "object",
+            "properties": {
+                "metric": {"type": "string", "description": "Metric under investigation (e.g. ROI, Acquisition_Cost)"},
+                "filters": {"type": "object", "description": "Segment filters (e.g. Location, Channel_Used)"},
+            },
+        },
+    )(investigate_root_cause)
+
     # Dataset tools
     registry.register(
         name="inspect_dataset",

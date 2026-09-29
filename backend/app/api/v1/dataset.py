@@ -20,6 +20,7 @@ from backend.app.data.storage import save_dataset, get_dataset
 from backend.app.agent.plan_schemas import DashboardPlan
 from backend.app.agent.dashboard_planner import DashboardPlanner
 from backend.app.analytics.comparator import DatasetComparator, DatasetComparisonResult
+from backend.app.data.quality_engine import DataQualityEngine, DataQualityReport
 
 router = APIRouter()
 
@@ -30,6 +31,7 @@ class DatasetPipelineResponse(BaseModel):
     validation: DatasetValidationResult
     cleaning: DatasetCleaningResult
     profiling: DatasetProfileResult
+    quality: Optional[DataQualityReport] = None
 
 
 async def _read_and_validate_upload(file: UploadFile) -> tuple[bytes, str]:
@@ -145,7 +147,10 @@ async def process_dataset_pipeline(
         # 4. Profile
         profiling = profile_dataset(cleaned_df)
 
-        # 5. Register in storage
+        # 5. Data Quality Score
+        quality = DataQualityEngine.evaluate(cleaned_df)
+
+        # 6. Register in storage
         dataset_id = save_dataset(cleaned_df, filename=filename)
 
         return DatasetPipelineResponse(
@@ -154,6 +159,7 @@ async def process_dataset_pipeline(
             validation=validation,
             cleaning=cleaning,
             profiling=profiling,
+            quality=quality,
         )
     except HTTPException:
         raise
@@ -161,6 +167,34 @@ async def process_dataset_pipeline(
         raise HTTPException(
             status_code=HTTP_422,
             detail=f"Failed to process dataset pipeline: {str(e)}",
+        )
+
+
+@router.post("/quality", response_model=DataQualityReport)
+async def evaluate_dataset_quality(
+    file: Optional[UploadFile] = File(default=None),
+    dataset_id: Optional[str] = Query(default=None),
+):
+    """
+    Evaluates 5-dimensional data quality (Completeness, Validity, Consistency,
+    Uniqueness, and Statistical Outlier Health) and returns a composite quality score (0-100) and grade.
+    """
+    if file:
+        content, filename = await _read_and_validate_upload(file)
+        df, _ = load_dataset_into_df(content, file_name=filename)
+        return DataQualityEngine.evaluate(df)
+    elif dataset_id:
+        df = get_dataset(dataset_id)
+        if df is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Dataset with ID '{dataset_id}' not found.",
+            )
+        return DataQualityEngine.evaluate(df)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either a file upload or dataset_id must be provided.",
         )
 
 

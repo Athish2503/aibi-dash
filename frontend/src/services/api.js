@@ -160,14 +160,36 @@ export async function publishToService({ artifactId, workspaceId, targetReportNa
   return await res.json();
 }
 
-export async function sendChatMessage(datasetId, question, conversationHistory = []) {
+export async function getAvailableModels() {
+  const res = await fetch(`${API_BASE}/models`);
+  if (!res.ok) throw new Error('Failed to fetch AI models');
+  return await res.json();
+}
+
+export async function switchActiveModel(provider, model) {
+  const res = await fetch(`${API_BASE}/models/switch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, model }),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to switch AI model');
+  }
+  return await res.json();
+}
+
+export async function sendChatMessage(datasetId, question, conversationHistory = [], options = {}) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: options.signal || undefined,
     body: JSON.stringify({
       dataset_id: datasetId,
       question,
       conversation_history: conversationHistory,
+      provider: options.provider || undefined,
+      model: options.model || undefined,
     }),
   });
 

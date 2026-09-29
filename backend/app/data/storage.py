@@ -43,16 +43,48 @@ def save_dataset(df: pd.DataFrame, filename: str, dataset_id: Optional[str] = No
 def get_dataset(dataset_id: str) -> Optional[pd.DataFrame]:
     """
     Retrieves a DataFrame by dataset_id, either from cache or disk.
+    Supports 'active-dataset', 'default', or fallback to newest uploaded dataset.
     """
+    if not dataset_id:
+        return None
+
     if dataset_id in _DATASET_CACHE:
         return _DATASET_CACHE[dataset_id]
 
     # Look for file on disk in UPLOAD_DIR
     file_path = settings.UPLOAD_DIR / f"{dataset_id}.csv"
     if file_path.exists():
-        df = pd.read_csv(file_path)
-        _DATASET_CACHE[dataset_id] = df
-        return df
+        try:
+            df = pd.read_csv(file_path)
+            _DATASET_CACHE[dataset_id] = df
+            return df
+        except Exception:
+            pass
+
+    # If dataset_id is generic or not found, try to locate most recent or default dataset
+    if dataset_id in ("active-dataset", "default", "latest", "sample") or not _DATASET_CACHE:
+        if _DATASET_CACHE:
+            latest_id = list(_DATASET_CACHE.keys())[-1]
+            return _DATASET_CACHE[latest_id]
+
+        sample_path = settings.UPLOAD_DIR / "marketing_campaign_dataset.csv"
+        if sample_path.exists():
+            try:
+                df = pd.read_csv(sample_path)
+                _DATASET_CACHE[dataset_id] = df
+                return df
+            except Exception:
+                pass
+
+        csv_files = list(settings.UPLOAD_DIR.glob("*.csv"))
+        if csv_files:
+            csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            try:
+                df = pd.read_csv(csv_files[0])
+                _DATASET_CACHE[dataset_id] = df
+                return df
+            except Exception:
+                pass
 
     return None
 

@@ -48,9 +48,9 @@ class DashboardPlanner:
 
     @property
     def llm_adapter(self) -> LLMAdapter:
-        if self._llm_adapter is None:
-            self._llm_adapter = get_llm_adapter()
-        return self._llm_adapter
+        if self._llm_adapter is not None:
+            return self._llm_adapter
+        return get_llm_adapter()
 
     def generate_deterministic_plan(
         self,

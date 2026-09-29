@@ -110,9 +110,15 @@ class DAXCoPilot:
     verifying syntax and column references against the target table.
     """
 
-    def __init__(self):
+    def __init__(self, llm: Optional[LLMAdapter] = None):
         self.validator = DeterministicDAXValidator()
-        self.llm = get_llm_adapter()
+        self._llm = llm
+
+    @property
+    def llm(self) -> LLMAdapter:
+        if self._llm is not None:
+            return self._llm
+        return get_llm_adapter()
 
     @staticmethod
     def get_templates() -> list[DAXTemplate]:

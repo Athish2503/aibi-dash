@@ -21,12 +21,14 @@ class Settings(BaseModel):
     MAX_FILE_SIZE_BYTES: int = 100 * 1024 * 1024  # 100 MB
     ALLOWED_EXTENSIONS: set[str] = {".csv", ".xlsx"}
 
-    # LLM / Gemini settings
+    # LLM / Gemini & Ollama settings
     GEMINI_API_KEY: str | None = Field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
     GEMINI_MODEL: str = Field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-3.6-flash"))
     GEMINI_PROJECT_NAME: str | None = Field(default_factory=lambda: os.getenv("GEMINI_PROJECT_NAME"))
     GEMINI_PROJECT_NUMBER: str | None = Field(default_factory=lambda: os.getenv("GEMINI_PROJECT_NUMBER"))
     LLM_PROVIDER: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "gemini"))
+    OLLAMA_BASE_URL: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
+    OLLAMA_MODEL: str = Field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "llama3.2:1b"))
 
     # Power BI Service / Fabric settings
     POWERBI_CLIENT_ID: str | None = Field(default_factory=lambda: os.getenv("POWERBI_CLIENT_ID"))
