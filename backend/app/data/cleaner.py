@@ -74,6 +74,15 @@ def clean_dataset(
     # 6. Coerce numeric columns
     for col in NUMERIC_COLUMNS:
         if col in cleaned_df.columns:
+            series = cleaned_df[col]
+            if series.dtype == object or pd.api.types.is_string_dtype(series):
+                cleaned_df[col] = (
+                    series.astype(str)
+                    .str.replace(r"[\$,€£]", "", regex=True)
+                    .str.replace(",", "", regex=False)
+                    .str.replace("%", "", regex=False)
+                    .str.strip()
+                )
             cleaned_df[col] = pd.to_numeric(cleaned_df[col], errors="coerce")
             normalized_columns.append(col)
 

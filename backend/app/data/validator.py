@@ -108,8 +108,18 @@ def validate_dataset(
         # 2. Check numeric columns
         for num_col in NUMERIC_COLUMNS:
             series = df[num_col]
-            # Try to coerce numeric
-            coerced = pd.to_numeric(series, errors="coerce")
+            # Try to coerce numeric, handling optional currency symbols and commas
+            if series.dtype == object or pd.api.types.is_string_dtype(series):
+                test_series = (
+                    series.astype(str)
+                    .str.replace(r"[\$,€£]", "", regex=True)
+                    .str.replace(",", "", regex=False)
+                    .str.replace("%", "", regex=False)
+                    .str.strip()
+                )
+                coerced = pd.to_numeric(test_series, errors="coerce")
+            else:
+                coerced = pd.to_numeric(series, errors="coerce")
             invalid_num_mask = series.notna() & coerced.isna()
             invalid_count = int(invalid_num_mask.sum())
 

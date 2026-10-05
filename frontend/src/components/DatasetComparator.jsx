@@ -11,6 +11,26 @@ import {
 } from 'recharts';
 import { compareUploadedDatasets } from '../services/api';
 
+// Defensive numeric formatters
+const formatNum = (val, decimals = 2, fallback = '0.00') => {
+  if (val === null || val === undefined || isNaN(Number(val))) return fallback;
+  return Number(val).toFixed(decimals);
+};
+
+const formatCurrency = (val, decimals = 2, fallback = '0.00') => {
+  if (val === null || val === undefined || isNaN(Number(val))) return fallback;
+  return Number(val).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+
+const formatPctChange = (val, fallback = '0.0%') => {
+  if (val === null || val === undefined || isNaN(Number(val))) return fallback;
+  const num = Number(val);
+  return `${num >= 0 ? '+' : ''}${num.toFixed(1)}%`;
+};
+
 export default function DatasetComparator({
   activeDatasetFile,
   activeDatasetName,
@@ -45,16 +65,22 @@ export default function DatasetComparator({
     }
   };
 
-  // Prepare Recharts chart data
+  // Prepare Recharts chart data safely
   const chartData = comparisonResult?.channels?.map((ch) => ({
     channel: ch.channel,
-    baselineRoi: ch.roi_baseline,
-    comparisonRoi: ch.roi_comparison,
-    roiDelta: ch.roi_delta,
-    baselineCac: ch.cac_baseline,
-    comparisonCac: ch.cac_comparison,
-    cacDelta: ch.cac_delta,
+    baselineRoi: Number(ch.roi_baseline ?? 0),
+    comparisonRoi: Number(ch.roi_comparison ?? 0),
+    roiDelta: Number(ch.roi_delta ?? 0),
+    baselineCac: Number(ch.cac_baseline ?? 0),
+    comparisonCac: Number(ch.cac_comparison ?? 0),
+    cacDelta: Number(ch.cac_delta ?? 0),
   })) || [];
+
+  const isIdentical =
+    comparisonResult &&
+    Math.abs(comparisonResult.roi?.absolute_delta || 0) < 0.0001 &&
+    Math.abs(comparisonResult.cac?.absolute_delta || 0) < 0.0001 &&
+    Math.abs(comparisonResult.conversion_rate?.absolute_delta || 0) < 0.0001;
 
   return (
     <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
@@ -200,6 +226,21 @@ export default function DatasetComparator({
         {/* Results View */}
         {comparisonResult && (
           <div className="flex flex-col gap-6 animate-fade-in">
+            {/* Identical Dataset Banner */}
+            {isIdentical && (
+              <div className="p-4 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200 text-xs flex items-center gap-3 shadow-xs">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-600 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-lg">verified</span>
+                </div>
+                <div>
+                  <div className="font-bold text-sm">Identical Baseline & Comparison Datasets</div>
+                  <div className="text-sky-700 dark:text-sky-300 text-[11px]">
+                    Both periods contain identical records and metrics. All variances are 0.00, demonstrating deterministic stability across all dimensions.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Executive Delta Metric Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {/* ROI Delta */}
@@ -209,23 +250,24 @@ export default function DatasetComparator({
                 </span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-extrabold text-on-surface">
-                    {comparisonResult.roi.comparison_value.toFixed(2)}x
+                    {formatNum(comparisonResult.roi?.comparison_value)}x
                   </span>
                   <span
                     className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                      comparisonResult.roi.sentiment === 'positive'
+                      comparisonResult.roi?.sentiment === 'positive'
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
+                        : comparisonResult.roi?.sentiment === 'negative'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {comparisonResult.roi.absolute_delta >= 0 ? '+' : ''}
-                    {comparisonResult.roi.absolute_delta.toFixed(2)}x (
-                    {comparisonResult.roi.percentage_change >= 0 ? '+' : ''}
-                    {comparisonResult.roi.percentage_change}%)
+                    {(comparisonResult.roi?.absolute_delta ?? 0) >= 0 ? '+' : ''}
+                    {formatNum(comparisonResult.roi?.absolute_delta)}x (
+                    {formatPctChange(comparisonResult.roi?.percentage_change)})
                   </span>
                 </div>
                 <span className="text-[10px] text-on-surface-variant">
-                  vs {comparisonResult.roi.baseline_value.toFixed(2)}x in {comparisonResult.baseline_label}
+                  vs {formatNum(comparisonResult.roi?.baseline_value)}x in {comparisonResult.baseline_label}
                 </span>
               </div>
 
@@ -236,23 +278,24 @@ export default function DatasetComparator({
                 </span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-extrabold text-on-surface">
-                    ${comparisonResult.cac.comparison_value.toFixed(2)}
+                    ${formatCurrency(comparisonResult.cac?.comparison_value)}
                   </span>
                   <span
                     className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                      comparisonResult.cac.sentiment === 'positive'
+                      comparisonResult.cac?.sentiment === 'positive'
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
+                        : comparisonResult.cac?.sentiment === 'negative'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {comparisonResult.cac.absolute_delta >= 0 ? '+' : ''}$
-                    {comparisonResult.cac.absolute_delta.toFixed(2)} (
-                    {comparisonResult.cac.percentage_change >= 0 ? '+' : ''}
-                    {comparisonResult.cac.percentage_change}%)
+                    {(comparisonResult.cac?.absolute_delta ?? 0) >= 0 ? '+' : ''}$
+                    {formatCurrency(comparisonResult.cac?.absolute_delta)} (
+                    {formatPctChange(comparisonResult.cac?.percentage_change)})
                   </span>
                 </div>
                 <span className="text-[10px] text-on-surface-variant">
-                  vs ${comparisonResult.cac.baseline_value.toFixed(2)} in {comparisonResult.baseline_label}
+                  vs ${formatCurrency(comparisonResult.cac?.baseline_value)} in {comparisonResult.baseline_label}
                 </span>
               </div>
 
@@ -263,21 +306,23 @@ export default function DatasetComparator({
                 </span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-extrabold text-on-surface">
-                    {(comparisonResult.conversion_rate.comparison_value * 100).toFixed(2)}%
+                    {formatNum((comparisonResult.conversion_rate?.comparison_value ?? 0) * 100)}%
                   </span>
                   <span
                     className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                      comparisonResult.conversion_rate.sentiment === 'positive'
+                      comparisonResult.conversion_rate?.sentiment === 'positive'
                         ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
+                        : comparisonResult.conversion_rate?.sentiment === 'negative'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {comparisonResult.conversion_rate.absolute_delta >= 0 ? '+' : ''}
-                    {(comparisonResult.conversion_rate.absolute_delta * 100).toFixed(2)}% pts
+                    {(comparisonResult.conversion_rate?.absolute_delta ?? 0) >= 0 ? '+' : ''}
+                    {formatNum((comparisonResult.conversion_rate?.absolute_delta ?? 0) * 100)}% pts
                   </span>
                 </div>
                 <span className="text-[10px] text-on-surface-variant">
-                  vs {(comparisonResult.conversion_rate.baseline_value * 100).toFixed(2)}% in {comparisonResult.baseline_label}
+                  vs {formatNum((comparisonResult.conversion_rate?.baseline_value ?? 0) * 100)}% in {comparisonResult.baseline_label}
                 </span>
               </div>
 
@@ -288,15 +333,15 @@ export default function DatasetComparator({
                 </span>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-extrabold text-on-surface">
-                    {comparisonResult.total_records_comparison.toLocaleString()}
+                    {(comparisonResult.total_records_comparison ?? 0).toLocaleString()}
                   </span>
                   <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-surface border border-outline-variant/40 text-on-surface">
-                    {comparisonResult.records_delta >= 0 ? '+' : ''}
-                    {comparisonResult.records_delta.toLocaleString()}
+                    {(comparisonResult.records_delta ?? 0) >= 0 ? '+' : ''}
+                    {(comparisonResult.records_delta ?? 0).toLocaleString()}
                   </span>
                 </div>
                 <span className="text-[10px] text-on-surface-variant">
-                  {comparisonResult.total_records_baseline.toLocaleString()} in {comparisonResult.baseline_label}
+                  {(comparisonResult.total_records_baseline ?? 0).toLocaleString()} in {comparisonResult.baseline_label}
                 </span>
               </div>
             </div>
@@ -453,16 +498,16 @@ export default function DatasetComparator({
                     {comparisonResult.channels?.map((ch, idx) => (
                       <tr key={idx} className="hover:bg-surface-container/40 transition-colors">
                         <td className="px-4 py-2 font-bold text-on-surface">{ch.channel}</td>
-                        <td className="px-4 py-2">{ch.roi_baseline.toFixed(2)}x</td>
-                        <td className="px-4 py-2 font-bold">{ch.roi_comparison.toFixed(2)}x</td>
-                        <td className={`px-4 py-2 font-bold ${ch.roi_delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {ch.roi_delta >= 0 ? '+' : ''}
-                          {ch.roi_delta.toFixed(2)}x ({ch.roi_pct_change >= 0 ? '+' : ''}{ch.roi_pct_change}%)
+                        <td className="px-4 py-2">{formatNum(ch.roi_baseline)}x</td>
+                        <td className="px-4 py-2 font-bold">{formatNum(ch.roi_comparison)}x</td>
+                        <td className={`px-4 py-2 font-bold ${(ch.roi_delta ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {(ch.roi_delta ?? 0) >= 0 ? '+' : ''}
+                          {formatNum(ch.roi_delta)}x ({formatPctChange(ch.roi_pct_change)})
                         </td>
-                        <td className="px-4 py-2">${ch.cac_baseline.toFixed(2)}</td>
-                        <td className="px-4 py-2 font-bold">${ch.cac_comparison.toFixed(2)}</td>
-                        <td className={`px-4 py-2 font-bold ${ch.cac_delta <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {ch.cac_delta >= 0 ? '+' : ''}${ch.cac_delta.toFixed(2)}
+                        <td className="px-4 py-2">${formatCurrency(ch.cac_baseline)}</td>
+                        <td className="px-4 py-2 font-bold">${formatCurrency(ch.cac_comparison)}</td>
+                        <td className={`px-4 py-2 font-bold ${(ch.cac_delta ?? 0) <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {(ch.cac_delta ?? 0) >= 0 ? '+' : ''}${formatCurrency(ch.cac_delta)}
                         </td>
                         <td className="px-4 py-2">
                           <span
