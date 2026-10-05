@@ -1,4 +1,5 @@
 from typing import Any, Optional
+import inspect
 import json
 import logging
 import re
@@ -298,7 +299,7 @@ class AgentOrchestrator:
                 metric=metric,
                 reasoning="Question asks about geographical performance",
             )
-        elif "company" in q_lower or "competitor" in q_lower:
+        elif any(w in q_lower for w in ["company", "companies", "competitor", "competitors", "brand", "brands"]):
             return QueryIntent(
                 tool_name="analyze_companies",
                 filters=extracted_filters,
@@ -314,12 +315,25 @@ class AgentOrchestrator:
                 parameters={"top_n": 5, "ascending": asc},
                 reasoning="Question requests campaign ranking",
             )
-        elif "kpi" in q_lower or "total" in q_lower or "overall" in q_lower or "summary" in q_lower or "portfolio" in q_lower:
+        is_kpi_query = any(
+            token in q_lower
+            for token in [
+                "kpi", "total", "overall", "summary", "portfolio", "average", "mean",
+                "what is the roi", "what is our roi", "average roi", "avg roi",
+                "conversion rate", "average conversion", "avg conversion",
+                "acquisition cost", "average cac", "avg cac", "what is the cac",
+            ]
+        ) and not any(
+            dim in q_lower
+            for dim in ["channel", "platform", "audience", "demographic", "duration", "company", "competitor", "location", "geograph", "country"]
+        )
+
+        if is_kpi_query:
             return QueryIntent(
                 tool_name="calculate_kpis",
                 filters=extracted_filters,
                 metric=metric,
-                reasoning="Question asks for overall summary KPIs",
+                reasoning="Question asks for overall summary KPIs or aggregate portfolio metrics",
             )
         elif "channel" in q_lower or "platform" in q_lower or is_contextual_follow_up:
             return QueryIntent(
@@ -362,9 +376,43 @@ class AgentOrchestrator:
         })
 
         # Step 2: Execute deterministic tool
-        tool_args: dict[str, Any] = {"df": df}
-        if intent.filters:
-            tool_args["filters"] = intent.filters
+        tool_args: dict[str, Any] = {}
+        tool_accepts_filters = False
+        try:
+            tool_def = self.registry.get_tool(tool_name)
+            sig = inspect.signature(tool_def.func)
+            tool_accepts_filters = "filters" in sig.parameters
+        except Exception:
+            pass
+
+        if tool_accepts_filters:
+            # Tools like investigate_root_cause or analyze_channels handle filters and baseline comparison internally
+            tool_args["df"] = df
+            if intent.filters:
+                tool_args["filters"] = intent.filters
+        else:
+            # Tools like calculate_kpis or detect_anomalies do not accept filters kwarg; pre-filter df
+            working_df = df
+            if intent.filters and df is not None and not df.empty:
+                try:
+                    from backend.app.analytics.segmentation import apply_filters
+                    working_df = apply_filters(df, intent.filters)
+                    if working_df.empty:
+                        return GroundedAnswer(
+                            question=question,
+                            answer=f"No matching campaigns found for your query with filters {intent.filters}.",
+                            evidence=[],
+                            tools_used=[tool_name],
+                            filters_applied=intent.filters,
+                            visual_spec=None,
+                            steps=steps,
+                            follow_ups=["Try broadening the filter criteria", "Show overall portfolio KPIs"],
+                        )
+                except Exception as fe:
+                    logger.warning(f"Could not pre-filter DataFrame: {fe}")
+                    working_df = df
+            tool_args["df"] = working_df
+
         if intent.parameters:
             tool_args.update(intent.parameters)
 
@@ -1119,6 +1167,33 @@ class AgentOrchestrator:
                     f"3. **Deploy Power BI DAX Guardrail**: Implement `ROI Alert = IF([Average ROI] < {max(2.0, avg_roi - 0.5):.2f}, \"⚠️ Throttle Spend\", \"✅ Optimal\")` to automatically safeguard campaign budget."
                 )
 
+            if ("roi" in q_lower or "return" in q_lower) and not ("cac" in q_lower or "cost" in q_lower or "conversion" in q_lower):
+                return (
+                    f"The average Return on Investment (ROI) across your campaigns{filter_desc} is **{avg_roi:.2f}x** (analyzed across **{total:,}** campaigns).\n\n"
+                    f"• **Average ROI**: **{avg_roi:.2f}x**\n"
+                    f"• **Average Conversion Rate**: **{cr_display:.2f}%**\n"
+                    f"• **Average Acquisition Cost (CAC)**: **${avg_cac:,.2f}**\n\n"
+                    f"Overall, your portfolio yields **{avg_roi:.2f}x** in returns on ad spend."
+                )
+
+            if ("conversion" in q_lower or "conv" in q_lower) and not ("roi" in q_lower or "cost" in q_lower):
+                return (
+                    f"The average conversion rate across your campaigns{filter_desc} is **{cr_display:.2f}%** (analyzed across **{total:,}** campaigns).\n\n"
+                    f"• **Average Conversion Rate**: **{cr_display:.2f}%**\n"
+                    f"• **Average ROI**: **{avg_roi:.2f}x**\n"
+                    f"• **Average Acquisition Cost (CAC)**: **${avg_cac:,.2f}**\n\n"
+                    f"Overall, campaigns convert at **{cr_display:.2f}%** on average."
+                )
+
+            if ("cac" in q_lower or "cost" in q_lower or "acquisition" in q_lower) and not ("roi" in q_lower or "conversion" in q_lower):
+                return (
+                    f"The average Customer Acquisition Cost (CAC) across your campaigns{filter_desc} is **${avg_cac:,.2f}** (analyzed across **{total:,}** campaigns).\n\n"
+                    f"• **Average Acquisition Cost (CAC)**: **${avg_cac:,.2f}**\n"
+                    f"• **Average ROI**: **{avg_roi:.2f}x**\n"
+                    f"• **Average Conversion Rate**: **{cr_display:.2f}%**\n\n"
+                    f"Overall, campaigns average **${avg_cac:,.2f}** per customer acquisition."
+                )
+
             return (
                 f"Based on your dataset{filter_desc}, here is the overall portfolio summary across **{total:,}** campaigns:\n\n"
                 f"• **Average ROI**: **{avg_roi:.2f}x**\n"
@@ -1228,6 +1303,57 @@ class AgentOrchestrator:
                 + "\n\n**Recommendation**: Review these outlier campaigns to understand unusual variances."
             )
 
+        if intent.tool_name == "analyze_duration" and evidence:
+            dur_key = "Duration_Days" if "Duration_Days" in evidence[0] else "Duration"
+            top = evidence[0]
+            top_dur = top.get(dur_key, "Unknown")
+            top_roi = float(top.get("average_roi", 0.0))
+            top_cr = float(top.get("average_conversion_rate", 0.0))
+            top_cr_disp = top_cr * 100 if top_cr < 1.0 else top_cr
+            top_cac = float(top.get("average_acquisition_cost", 0.0))
+
+            lines = []
+            for item in evidence:
+                d_val = item.get(dur_key, "Other")
+                roi = float(item.get("average_roi", 0.0))
+                cr = float(item.get("average_conversion_rate", 0.0))
+                c_disp = cr * 100 if cr < 1.0 else cr
+                cac = float(item.get("average_acquisition_cost", 0.0))
+                cnt = item.get("campaign_count", 0)
+                lines.append(f"• **{d_val} Days**: **{roi:.2f}x ROI** | **{c_disp:.2f}%** conversion | CAC: **${cac:,.2f}** ({cnt:,} campaigns)")
+
+            return (
+                f"Analyzing performance across campaign durations{filter_desc}:\n\n"
+                f"**{top_dur}-day campaigns** delivered the highest average return at **{top_roi:.2f}x ROI** "
+                f"with a **{top_cr_disp:.2f}%** conversion rate and average CAC of **${top_cac:,.2f}**.\n\n"
+                f"Duration breakdown:\n"
+                + "\n".join(lines)
+                + f"\n\n**Takeaway**: {top_dur}-day campaign flights provided the most optimal return on ad spend."
+            )
+
+        if intent.tool_name == "analyze_companies" and evidence:
+            top = evidence[0]
+            top_comp = top.get("Company", "Unknown")
+            top_roi = float(top.get("average_roi", 0.0))
+            top_cnt = top.get("campaign_count", 0)
+
+            lines = []
+            for item in evidence:
+                comp = item.get("Company", "Other")
+                roi = float(item.get("average_roi", 0.0))
+                cr = float(item.get("average_conversion_rate", 0.0))
+                c_disp = cr * 100 if cr < 1.0 else cr
+                cac = float(item.get("average_acquisition_cost", 0.0))
+                cnt = item.get("campaign_count", 0)
+                lines.append(f"• **{comp}**: **{roi:.2f}x ROI** | **{c_disp:.2f}%** conversion | CAC: **${cac:,.2f}** ({cnt:,} campaigns)")
+
+            return (
+                f"Competitive / company performance benchmark{filter_desc}:\n\n"
+                f"**{top_comp}** achieved the leading average return at **{top_roi:.2f}x ROI** across {top_cnt:,} campaigns.\n\n"
+                f"Company comparison:\n"
+                + "\n".join(lines)
+            )
+
         if intent.tool_name == "investigate_root_cause" and evidence:
             info = evidence[0] if isinstance(evidence[0], dict) else {}
             focus = info.get("focus_segment", "Target Segment")
@@ -1271,6 +1397,20 @@ class AgentOrchestrator:
                 chan_lines.append(f"* **{ch_name}**: **{c_roi:.4f}x ROI** ({c_cnt:,} campaigns) — *{marker}*")
             chan_str = "\n".join(chan_lines) if chan_lines else f"* Lowest Channel: **{primary_drag}** ({lowest_channel_roi:.4f}x ROI)"
 
+            # Safe dynamic location benchmarking text
+            if len(locations) >= 2:
+                loc1_name = locations[0].get("Location", "Market 1")
+                loc1_roi = float(locations[0].get("average_roi", 0.0))
+                loc2_name = locations[1].get("Location", "Market 2")
+                loc2_roi = float(locations[1].get("average_roi", 0.0))
+                loc_context = f"While top regional markets such as **{loc1_name}** ({loc1_roi:.4f}x) and **{loc2_name}** ({loc2_roi:.4f}x) perform above benchmark, "
+            elif len(locations) == 1:
+                loc1_name = locations[0].get("Location", "Market 1")
+                loc1_roi = float(locations[0].get("average_roi", 0.0))
+                loc_context = f"While **{loc1_name}** recorded {loc1_roi:.4f}x ROI, "
+            else:
+                loc_context = ""
+
             return (
                 f"### 🔍 Diagnostic Root Cause Analysis: ROI Variance in {focus}\n\n"
                 f"Based on deterministic multi-factor regression across **{seg_cnt:,}** campaigns in the uploaded dataset, "
@@ -1280,8 +1420,7 @@ class AgentOrchestrator:
                 f"{loc_table_md}\n\n"
                 f"### 📊 Key Diagnostic Drivers\n\n"
                 f"* **1. Primary Regional Drag — {lowest_loc} ({lowest_loc_roi:.4f}x ROI)**:\n"
-                f"  While regional markets such as **Miami** ({float(locations[0].get('average_roi', 0.0)):.4f}x) and "
-                f"**Los Angeles** ({float(locations[1].get('average_roi', 0.0)):.4f}x) perform above benchmark, "
+                f"  {loc_context}"
                 f"**{lowest_loc}** underperforms at **{lowest_loc_roi:.4f}x**, producing the primary geographic drag on the {focus} portfolio.\n\n"
                 f"* **2. Channel Polarization & Media Inefficiency**:\n"
                 f"  Within {lowest_loc} and the broader {focus} cohort, return decay is heavily concentrated in video and search channels:\n"
@@ -1300,9 +1439,22 @@ class AgentOrchestrator:
                 f"  ```"
             )
 
-        # General table / record fallback
-        first_item = evidence[0] if evidence else {}
-        return f"Query completed using **{intent.tool_name}**{filter_desc}.\n\nLeading result: {first_item}."
+        # General table / record fallback with clean formatting instead of raw dict JSON
+        if evidence and isinstance(evidence, list):
+            lines = []
+            for item in evidence[:10]:
+                if isinstance(item, dict):
+                    formatted_pairs = [f"**{k}**: {f'{v:.2f}' if isinstance(v, float) else v}" for k, v in item.items() if not k.startswith("_")]
+                    lines.append("• " + " | ".join(formatted_pairs))
+                else:
+                    lines.append(f"• {item}")
+            if lines:
+                return (
+                    f"Query completed using **{intent.tool_name}**{filter_desc}:\n\n"
+                    + "\n".join(lines)
+                )
+
+        return f"Query completed using **{intent.tool_name}**{filter_desc}."
 
     def generate_insights(self, df: pd.DataFrame) -> list[Insight]:
         """

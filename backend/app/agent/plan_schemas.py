@@ -71,7 +71,7 @@ class SlicerSpec(BaseModel):
 class MeasureSpec(BaseModel):
     """Semantic model measure specification."""
     name: str = Field(description="Name of the measure (e.g. Average ROI)")
-    column: str = Field(description="Source column in the dataset (e.g. ROI)")
+    column: Optional[str] = Field(default=None, description="Source column in the dataset (e.g. ROI) or None for calculated measures")
     aggregation: AggregationType = Field(description="Aggregation function")
     format: MeasureFormat = Field(default=MeasureFormat.NUMBER, description="Display formatting")
     dax_expression: Optional[str] = Field(default=None, description="Power BI DAX calculation expression")

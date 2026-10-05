@@ -48,9 +48,24 @@ def test_gemini_adapter_missing_key():
         adapter.generate("Hello world")
 
 
+def test_groq_adapter_missing_key():
+    from backend.app.agent.llm_adapter import GroqAdapter
+    adapter = GroqAdapter(api_key="")
+    with pytest.raises(LLMAuthenticationError):
+        adapter.generate("Hello world")
+
+
 def test_get_llm_adapter_factory():
     mock_adapter = get_llm_adapter("mock")
     assert isinstance(mock_adapter, MockLLMAdapter)
+
+    from backend.app.agent.llm_adapter import GroqAdapter
+    groq_adapter = get_llm_adapter("groq", "openai/gpt-oss-120b")
+    assert isinstance(groq_adapter, GroqAdapter)
+
+    # Test 'grok' alias routes to GroqAdapter
+    grok_adapter = get_llm_adapter("grok", "openai/gpt-oss-120b")
+    assert isinstance(grok_adapter, GroqAdapter)
 
     with pytest.raises(ValueError):
         get_llm_adapter("unknown_provider")
@@ -59,6 +74,7 @@ def test_get_llm_adapter_factory():
 def test_ollama_adapter_and_runtime_switching():
     from backend.app.agent.llm_adapter import (
         OllamaAdapter,
+        GroqAdapter,
         set_runtime_model,
         get_runtime_model,
         get_available_models,
@@ -72,15 +88,30 @@ def test_ollama_adapter_and_runtime_switching():
     ollama_from_factory = get_llm_adapter("ollama", "llama3.2:1b")
     assert isinstance(ollama_from_factory, OllamaAdapter)
 
-    # Test runtime switching
-    set_runtime_model("ollama", "llama3.2:1b")
+    # Test runtime switching to Groq/Grok
+    set_runtime_model("groq", "openai/gpt-oss-120b")
     current = get_runtime_model()
-    assert current["provider"] == "ollama"
-    assert current["model"] == "llama3.2:1b"
+    assert current["provider"] == "groq"
+    assert current["model"] == "openai/gpt-oss-120b"
 
-    # Test model listing
+    # Test runtime switching with grok alias
+    set_runtime_model("grok", "openai/gpt-oss-120b")
+    current = get_runtime_model()
+    assert current["provider"] == "groq"
+
+    # Test model listing includes Groq/Grok
     models_info = get_available_models()
     assert "models" in models_info
-    assert any("llama" in m["id"].lower() for m in models_info["models"])
-    assert models_info["active_provider"] == "ollama"
+    assert any(m["provider"] == "groq" for m in models_info["models"])
+
+
+def test_live_groq_api_call():
+    from backend.app.config import settings
+    from backend.app.agent.llm_adapter import GroqAdapter
+    if not settings.GROQ_API_KEY:
+        pytest.skip("GROQ_API_KEY not configured")
+
+    adapter = GroqAdapter(timeout_seconds=20.0)
+    response = adapter.generate("Respond with ONLY the word: SUCCESS")
+    assert "SUCCESS" in response.upper()
 

@@ -19,6 +19,9 @@ try:
     from backend.app.agent.plan_validator import validate_dashboard_plan
     from backend.app.agent.llm_adapter import (
         GeminiAdapter,
+        GroqAdapter,
+        GrokAdapter,
+        OllamaAdapter,
         LLMAdapter,
         LLMAuthenticationError,
         LLMError,
@@ -62,6 +65,9 @@ except ImportError:
     from app.agent.plan_validator import validate_dashboard_plan
     from app.agent.llm_adapter import (
         GeminiAdapter,
+        GroqAdapter,
+        GrokAdapter,
+        OllamaAdapter,
         LLMAdapter,
         LLMAuthenticationError,
         LLMError,
@@ -101,7 +107,10 @@ __all__ = [
     "analyze_columns",
     "select_visualization",
     "validate_dashboard_plan",
+    "GroqAdapter",
+    "GrokAdapter",
     "GeminiAdapter",
+    "OllamaAdapter",
     "LLMAdapter",
     "LLMAuthenticationError",
     "LLMError",

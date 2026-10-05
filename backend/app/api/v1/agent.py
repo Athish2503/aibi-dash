@@ -38,7 +38,7 @@ orchestrator = AgentOrchestrator()
 # --- Request / Response Contracts ---
 
 class ModelSwitchRequest(BaseModel):
-    provider: str = Field(description="LLM provider: 'ollama', 'gemini', or 'mock'")
+    provider: str = Field(description="LLM provider: 'groq', 'grok', 'ollama', 'gemini', or 'mock'")
     model: Optional[str] = Field(default=None, description="Specific model identifier, e.g. 'llama3.2:1b'")
 
 

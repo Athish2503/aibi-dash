@@ -53,13 +53,16 @@ def validate_dashboard_plan(
     measure_by_name = {m.name: m for m in plan.measures}
 
     for m in plan.measures:
-        if avail_cols_set and m.column not in avail_cols_set:
-            errors.append(f"Measure '{m.name}' references non-existent column '{m.column}'.")
-        if numeric_cols_set and m.column in avail_cols_set:
-            if m.aggregation in {AggregationType.SUM, AggregationType.AVG} and m.column not in numeric_cols_set:
-                errors.append(
-                    f"Measure '{m.name}' applies numeric aggregation '{m.aggregation.value}' to non-numeric column '{m.column}'."
-                )
+        if m.column:
+            if avail_cols_set and m.column not in avail_cols_set:
+                errors.append(f"Measure '{m.name}' references non-existent column '{m.column}'.")
+            if numeric_cols_set and avail_cols_set and m.column in avail_cols_set:
+                if m.aggregation in {AggregationType.SUM, AggregationType.AVG} and m.column not in numeric_cols_set:
+                    errors.append(
+                        f"Measure '{m.name}' applies numeric aggregation '{m.aggregation.value}' to non-numeric column '{m.column}'."
+                    )
+        elif not m.dax_expression:
+            errors.append(f"Measure '{m.name}' must have either a source column or a dax_expression.")
 
     # Rule 3: Page uniqueness and structure
     checked_rules.append("page_structure_and_unique_ids")

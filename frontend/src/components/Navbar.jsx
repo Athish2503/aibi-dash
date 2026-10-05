@@ -24,15 +24,16 @@ export default function Navbar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Format active model label
   const activeModelObj = availableModels.find(
     (m) => m.id === activeModel?.model || m.provider === activeModel?.provider
   );
-  const activeLabel = activeModel?.model || 'llama3.2:1b';
+  const activeLabel = activeModel?.model || 'openai/gpt-oss-120b';
+  const isGroq = activeModel?.provider === 'groq' || activeModel?.provider === 'grok';
   const isLocal = activeModel?.provider === 'ollama' || activeLabel.includes('llama') || activeLabel.includes('mistral');
   const isCloud = activeModel?.provider === 'gemini';
 
   const getModelIcon = (m) => {
+    if (m?.provider === 'groq' || m?.provider === 'grok') return '🚀';
     if (m?.provider === 'ollama' || m?.family === 'llama' || (m?.id && m.id.includes('llama'))) return '🦙';
     if (m?.provider === 'gemini') return '⚡';
     if (m?.provider === 'mock' || m?.id === 'deterministic') return '⚙️';
@@ -72,7 +73,9 @@ export default function Navbar({
             type="button"
             onClick={() => setShowModelMenu((prev) => !prev)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 border transition-all cursor-pointer shadow-xs select-none ${
-              isLocal
+              isGroq
+                ? 'bg-emerald-500/10 text-emerald-900 border-emerald-500/30 hover:bg-emerald-500/20'
+                : isLocal
                 ? 'bg-amber-500/10 text-amber-900 border-amber-500/30 hover:bg-amber-500/20'
                 : isCloud
                 ? 'bg-indigo-500/10 text-indigo-900 border-indigo-500/30 hover:bg-indigo-500/20'
@@ -80,12 +83,12 @@ export default function Navbar({
             }`}
             title="Switch active AI model for Chat, Planning, DAX & Insights"
           >
-            <span className="text-sm">{isLocal ? '🦙' : isCloud ? '⚡' : '⚙️'}</span>
+            <span className="text-sm">{isGroq ? '🚀' : isLocal ? '🦙' : isCloud ? '⚡' : '⚙️'}</span>
             <span className="font-medium tracking-tight truncate max-w-[130px] sm:max-w-[160px]">
               {activeLabel}
             </span>
             <span className="px-1.5 py-0.2 rounded text-[10px] uppercase font-bold tracking-wider bg-black/5 text-slate-700">
-              {isLocal ? 'Local' : isCloud ? 'Cloud' : 'Tools'}
+              {isGroq ? 'Groq/Grok' : isLocal ? 'Local' : isCloud ? 'Gemini' : 'Tools'}
             </span>
             <span className="material-symbols-outlined text-[15px] text-slate-500">
               {showModelMenu ? 'expand_less' : 'expand_more'}
@@ -105,8 +108,54 @@ export default function Navbar({
                 </div>
               </div>
 
+              {/* Group: Grok / Groq Models (Ultra-Fast Cloud) */}
+              <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center justify-between">
+                <span>Grok / Groq (Ultra-Fast)</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">Active</span>
+              </div>
+              <div className="space-y-0.5">
+                {(availableModels.filter((m) => m.provider === 'groq' || m.provider === 'grok').length > 0
+                  ? availableModels.filter((m) => m.provider === 'groq' || m.provider === 'grok')
+                  : [
+                      { id: 'openai/gpt-oss-120b', name: 'Grok / Groq 120B', provider: 'groq', badge: 'High Accuracy' },
+                      { id: 'openai/gpt-oss-20b', name: 'Grok / Groq 20B', provider: 'groq', badge: 'Fast Inference' },
+                      { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B', provider: 'groq', badge: 'Versatile Reasoning' },
+                    ]
+                ).map((m) => {
+                  const isSelected = (activeModel?.provider === 'groq' || activeModel?.provider === 'grok') && activeModel?.model === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        onSwitchModel?.(m.provider, m.id);
+                        setShowModelMenu(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-500/10 text-emerald-900 font-bold border border-emerald-500/30'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{getModelIcon(m)}</span>
+                        <div>
+                          <div className="font-semibold text-slate-900 leading-tight">{m.name || m.id}</div>
+                          <div className="text-[10px] text-slate-400 font-normal">{m.badge || 'Cloud LLM'}</div>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span className="material-symbols-outlined text-emerald-600 text-sm font-bold">
+                          check
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Group: Local Ollama Models (Llama 3.2, Mistral, etc.) */}
-              <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="px-3 pt-2.5 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 mt-1">
                 Local Models (Ollama)
               </div>
               <div className="space-y-0.5">

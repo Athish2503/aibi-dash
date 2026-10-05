@@ -34,7 +34,7 @@ export default function App() {
 
   // Global AI Model Management
   const [availableModels, setAvailableModels] = useState([]);
-  const [activeModel, setActiveModel] = useState({ provider: 'ollama', model: 'llama3.2:1b' });
+  const [activeModel, setActiveModel] = useState({ provider: 'groq', model: 'openai/gpt-oss-120b' });
   const [ollamaOnline, setOllamaOnline] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -56,8 +56,8 @@ export default function App() {
         if (m?.models) {
           setAvailableModels(m.models);
           setActiveModel({
-            provider: m.active_provider || 'ollama',
-            model: m.active_model || 'llama3.2:1b',
+            provider: m.active_provider || 'groq',
+            model: m.active_model || 'openai/gpt-oss-120b',
           });
           setOllamaOnline(Boolean(m.ollama_online));
         }

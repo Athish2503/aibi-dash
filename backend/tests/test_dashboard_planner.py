@@ -1,6 +1,6 @@
 import pytest
 from backend.app.agent.dashboard_planner import DashboardPlanner
-from backend.app.agent.llm_adapter import MockLLMAdapter, GeminiAdapter
+from backend.app.agent.llm_adapter import MockLLMAdapter, GeminiAdapter, GroqAdapter
 from backend.app.agent.plan_schemas import (
     AggregationType,
     DashboardPage,
@@ -111,6 +111,37 @@ def test_live_gemini_plan_generation():
     """Live integration test against Gemini 2.5 Flash using configured credentials."""
     gemini_adapter = GeminiAdapter(timeout_seconds=20.0)
     planner = DashboardPlanner(llm_adapter=gemini_adapter)
+
+    columns = [
+        "Campaign_ID",
+        "Company",
+        "Campaign_Type",
+        "Target_Audience",
+        "Duration",
+        "Channel_Used",
+        "Conversion_Rate",
+        "Acquisition_Cost",
+        "ROI",
+        "Location",
+    ]
+
+    plan = planner.plan_with_ai(
+        dataset_name="Live Marketing Campaigns",
+        columns=columns,
+        user_prompt="Create a 2-page marketing dashboard with focus on ROI and audience segmentation.",
+    )
+
+    assert plan is not None
+    assert len(plan.pages) >= 2
+    assert plan.validation is not None
+    assert plan.validation.is_valid is True
+
+
+@pytest.mark.skipif(not settings.GROQ_API_KEY, reason="GROQ_API_KEY not configured")
+def test_live_groq_plan_generation():
+    """Live integration test against Groq / Grok (e.g. openai/gpt-oss-120b)."""
+    groq_adapter = GroqAdapter(timeout_seconds=30.0)
+    planner = DashboardPlanner(llm_adapter=groq_adapter)
 
     columns = [
         "Campaign_ID",

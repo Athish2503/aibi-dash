@@ -265,6 +265,7 @@ export default function NLMessageFormatter({ content }) {
   let lineIdx = 0;
 
   while (lineIdx < lines.length) {
+    const prevLineIdx = lineIdx;
     const line = lines[lineIdx];
     const trimmed = line.trim();
 
@@ -290,53 +291,73 @@ export default function NLMessageFormatter({ content }) {
       continue;
     }
 
-    // 3. Markdown Table: starts with `|` and ends with `|`
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+    // 3. Markdown Table: lines starting with `|`
+    if (trimmed.startsWith('|')) {
       const tableLines = [];
-      while (
-        lineIdx < lines.length &&
-        lines[lineIdx].trim().startsWith('|') &&
-        lines[lineIdx].trim().endsWith('|')
-      ) {
+      while (lineIdx < lines.length && lines[lineIdx].trim().startsWith('|')) {
         tableLines.push(lines[lineIdx]);
         lineIdx++;
       }
-      elements.push(<MarkdownTable key={`table_${lineIdx}`} rawLines={tableLines} />);
+      const cleanLines = tableLines
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith('|') && l.endsWith('|'));
+
+      if (cleanLines.length >= 2) {
+        elements.push(<MarkdownTable key={`table_${lineIdx}`} rawLines={cleanLines} />);
+      } else {
+        // Safe rendering while streaming or for incomplete rows
+        elements.push(
+          <div key={`table_stream_${lineIdx}`} className="font-mono text-[11px] text-on-surface/90 my-1 whitespace-pre-wrap">
+            {tableLines.map((tl, tIdx) => (
+              <div key={tIdx}>{renderInline(tl)}</div>
+            ))}
+          </div>
+        );
+      }
       continue;
     }
 
     // 4. Headings: `# H1`, `## H2`, `### H3`, `#### H4`
-    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
-    if (headingMatch) {
+    const headingMatch = trimmed.match(/^(#{1,6})\s*(.*)$/);
+    if (headingMatch && trimmed.startsWith('#')) {
       const level = headingMatch[1].length;
-      const text = headingMatch[2];
+      const text = headingMatch[2].trim();
 
-      if (level === 1) {
-        elements.push(
-          <h1 key={`h1_${lineIdx}`} className="text-base font-extrabold text-on-surface mt-3 mb-1.5 flex items-center gap-2">
-            <span className="w-1.5 h-4 rounded-full bg-primary inline-block"></span>
-            {renderInline(text)}
-          </h1>
-        );
-      } else if (level === 2) {
-        elements.push(
-          <h2 key={`h2_${lineIdx}`} className="text-sm font-bold text-on-surface mt-3 mb-1 flex items-center gap-1.5">
-            <span className="w-1 h-3.5 rounded-full bg-primary/80 inline-block"></span>
-            {renderInline(text)}
-          </h2>
-        );
-      } else if (level === 3) {
-        elements.push(
-          <h3 key={`h3_${lineIdx}`} className="text-xs font-bold text-on-surface uppercase tracking-wide mt-2.5 mb-1 flex items-center gap-1.5 text-primary">
-            <span className="material-symbols-outlined text-sm">label_important</span>
-            {renderInline(text)}
-          </h3>
-        );
+      if (text) {
+        if (level === 1) {
+          elements.push(
+            <h1 key={`h1_${lineIdx}`} className="text-base font-extrabold text-on-surface mt-3 mb-1.5 flex items-center gap-2">
+              <span className="w-1.5 h-4 rounded-full bg-primary inline-block"></span>
+              {renderInline(text)}
+            </h1>
+          );
+        } else if (level === 2) {
+          elements.push(
+            <h2 key={`h2_${lineIdx}`} className="text-sm font-bold text-on-surface mt-3 mb-1 flex items-center gap-1.5">
+              <span className="w-1 h-3.5 rounded-full bg-primary/80 inline-block"></span>
+              {renderInline(text)}
+            </h2>
+          );
+        } else if (level === 3) {
+          elements.push(
+            <h3 key={`h3_${lineIdx}`} className="text-xs font-bold text-on-surface uppercase tracking-wide mt-2.5 mb-1 flex items-center gap-1.5 text-primary">
+              <span className="material-symbols-outlined text-sm">label_important</span>
+              {renderInline(text)}
+            </h3>
+          );
+        } else {
+          elements.push(
+            <h4 key={`h4_${lineIdx}`} className="text-xs font-semibold text-on-surface/90 mt-2 mb-0.5">
+              {renderInline(text)}
+            </h4>
+          );
+        }
       } else {
+        // Incomplete heading token while streaming
         elements.push(
-          <h4 key={`h4_${lineIdx}`} className="text-xs font-semibold text-on-surface/90 mt-2 mb-0.5">
-            {renderInline(text)}
-          </h4>
+          <div key={`h_stream_${lineIdx}`} className="text-xs font-bold text-primary my-1">
+            {headingMatch[1]}
+          </div>
         );
       }
       lineIdx++;
@@ -465,9 +486,9 @@ export default function NLMessageFormatter({ content }) {
     while (
       lineIdx < lines.length &&
       lines[lineIdx].trim() &&
-      !lines[lineIdx].trim().startsWith('#') &&
       !lines[lineIdx].trim().startsWith('|') &&
       !lines[lineIdx].trim().startsWith('```') &&
+      !/^(#{1,6})\s*/.test(lines[lineIdx].trim()) &&
       !/^[*•\-]\s+/.test(lines[lineIdx].trim()) &&
       !/^\d+\.\s+/.test(lines[lineIdx].trim()) &&
       !lines[lineIdx].trim().startsWith('>') &&
@@ -483,6 +504,16 @@ export default function NLMessageFormatter({ content }) {
           {renderInline(paraLines.join(' '))}
         </p>
       );
+    }
+
+    // Safety fallback: if no block consumed the line, consume 1 line to guarantee loop termination
+    if (lineIdx === prevLineIdx) {
+      elements.push(
+        <p key={`fallback_${lineIdx}`} className="text-xs text-on-surface/90 leading-relaxed my-1">
+          {renderInline(line)}
+        </p>
+      );
+      lineIdx++;
     }
   }
 

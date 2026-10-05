@@ -202,3 +202,49 @@ def test_investigate_root_cause_grounded_execution(sample_df):
     assert response.visual_spec is not None
     assert len(response.follow_ups) > 0
 
+
+def test_deterministic_formatter_kpi_queries(sample_df):
+    from backend.app.agent.llm_adapter import MockLLMAdapter
+    # Force deterministic formatter fallback by passing empty LLM response
+    orchestrator = AgentOrchestrator(llm_adapter=MockLLMAdapter(default_response=""))
+
+    res_roi = orchestrator.answer_natural_language_query("What is the average ROI?", sample_df)
+    assert res_roi.tools_used == ["calculate_kpis"]
+    assert "average return on investment" in res_roi.answer.lower() or "average roi" in res_roi.answer.lower()
+    assert "Average Conversion Rate" in res_roi.answer
+
+    res_cr = orchestrator.answer_natural_language_query("What is the average conversion rate?", sample_df)
+    assert res_cr.tools_used == ["calculate_kpis"]
+    assert "average conversion rate" in res_cr.answer.lower()
+
+    res_cac = orchestrator.answer_natural_language_query("What is the average CAC?", sample_df)
+    assert res_cac.tools_used == ["calculate_kpis"]
+    assert "Customer Acquisition Cost" in res_cac.answer or "CAC" in res_cac.answer
+
+
+def test_deterministic_formatter_duration_and_companies(sample_df):
+    from backend.app.agent.llm_adapter import MockLLMAdapter
+    orchestrator = AgentOrchestrator(llm_adapter=MockLLMAdapter(default_response=""))
+
+    res_dur = orchestrator.answer_natural_language_query("What campaign duration performs best?", sample_df)
+    assert res_dur.tools_used == ["analyze_duration"]
+    assert "campaign durations" in res_dur.answer.lower()
+    assert "days" in res_dur.answer.lower()
+
+    res_comp = orchestrator.answer_natural_language_query("How do companies compare?", sample_df)
+    assert res_comp.tools_used == ["analyze_companies"]
+    assert "company comparison" in res_comp.answer.lower() or "performance benchmark" in res_comp.answer.lower()
+
+
+def test_deterministic_formatter_with_filters(sample_df):
+    from backend.app.agent.llm_adapter import MockLLMAdapter
+    orchestrator = AgentOrchestrator(llm_adapter=MockLLMAdapter(default_response=""))
+
+    # Duration filter on calculate_kpis (previously threw TypeError: unexpected keyword 'filters')
+    res = orchestrator.answer_natural_language_query("What are the overall KPIs for 30-day campaigns?", sample_df)
+    assert res.tools_used == ["calculate_kpis"]
+    assert res.filters_applied.get("Duration") == 30
+    assert len(res.evidence) > 0
+    assert "Duration: 30" in res.answer
+
+

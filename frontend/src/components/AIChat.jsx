@@ -45,6 +45,7 @@ export default function AIChat({
   const streamTimerRef = useRef(null);
   const isProcessingRef = useRef(false);
   const abortControllerRef = useRef(null);
+  const processedMsgIdRef = useRef(null);
 
   // Close floating menus when clicking outside or pressing Escape
   useEffect(() => {
@@ -99,14 +100,24 @@ export default function AIChat({
     (datasetRows?.length > 0 ? Object.keys(datasetRows[0]).length : 10);
 
   const getModelIcon = (m) => {
+    if (m?.provider === 'groq' || m?.provider === 'grok') return '🚀';
     if (m?.provider === 'ollama' || m?.family === 'llama' || (m?.id && m.id.includes('llama'))) return '🦙';
     if (m?.provider === 'gemini') return '⚡';
     if (m?.provider === 'mock' || m?.id === 'deterministic') return '⚙️';
     return '🤖';
   };
 
-  const activeModelLabel = activeModel?.model || 'llama3.2:1b';
+  const activeModelLabel = activeModel?.model || 'openai/gpt-oss-120b';
+  const isGroqModel = activeModel?.provider === 'groq' || activeModel?.provider === 'grok';
   const isLocalModel = activeModel?.provider === 'ollama' || activeModelLabel.includes('llama') || activeModelLabel.includes('mistral');
+
+  const groqModels = (availableModels && availableModels.filter((m) => m.provider === 'groq' || m.provider === 'grok').length > 0)
+    ? availableModels.filter((m) => m.provider === 'groq' || m.provider === 'grok')
+    : [
+        { id: 'openai/gpt-oss-120b', name: 'Grok / Groq 120B', provider: 'groq', badge: 'High Accuracy' },
+        { id: 'openai/gpt-oss-20b', name: 'Grok / Groq 20B', provider: 'groq', badge: 'Fast Inference' },
+        { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B', provider: 'groq', badge: 'Versatile Reasoning' },
+      ];
 
   const ollamaModels = (availableModels && availableModels.filter((m) => m.provider === 'ollama').length > 0)
     ? availableModels.filter((m) => m.provider === 'ollama')
@@ -160,12 +171,13 @@ export default function AIChat({
     { label: 'CAC Comparison', query: 'Compare CAC across channels', icon: 'payments' },
   ];
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (behavior = 'auto') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    const behavior = isStreaming ? 'auto' : 'smooth';
+    scrollToBottom(behavior);
   }, [messages, isSending, isStreaming]);
 
   // Clean up streaming interval on unmount
@@ -190,6 +202,7 @@ export default function AIChat({
       clearInterval(streamTimerRef.current);
       streamTimerRef.current = null;
     }
+    processedMsgIdRef.current = null;
     setIsStreaming(false);
     setIsSending(false);
     isProcessingRef.current = false;
@@ -1009,8 +1022,8 @@ Evaluating the relationship between CAC and return multiplier across individual 
     ]);
 
     let currentIndex = 0;
-    // Chunk size calculated so that typical responses (500-1500 chars) stream in ~1.5 - 2.5 seconds
-    const stepSize = Math.max(3, Math.ceil(totalChars / 90));
+    // Smooth ~30fps progressive stream (~30ms per tick) with fluid character step size
+    const stepSize = Math.max(5, Math.ceil(totalChars / 45));
 
     if (streamTimerRef.current) clearInterval(streamTimerRef.current);
 
@@ -1039,8 +1052,7 @@ Evaluating the relationship between CAC and return multiplier across individual 
           )
         );
       }
-      scrollToBottom();
-    }, 18);
+    }, 30);
   };
 
   const handleCancelOrStop = () => {
@@ -1060,6 +1072,7 @@ Evaluating the relationship between CAC and return multiplier across individual 
       streamTimerRef.current = null;
     }
 
+    processedMsgIdRef.current = null;
     setIsSending(false);
     setIsStreaming(false);
     isProcessingRef.current = false;
@@ -1159,7 +1172,8 @@ Evaluating the relationship between CAC and return multiplier across individual 
   useEffect(() => {
     if (messages.length === 0 || isSending || isStreaming || isProcessingRef.current) return;
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg && lastMsg.role === 'user') {
+    if (lastMsg && lastMsg.role === 'user' && processedMsgIdRef.current !== lastMsg.id) {
+      processedMsgIdRef.current = lastMsg.id;
       processUserQuery(lastMsg.text, lastMsg.visualContext);
     }
   }, [messages, isSending, isStreaming]);
@@ -1681,8 +1695,47 @@ Evaluating the relationship between CAC and return multiplier across individual 
                 </div>
               </div>
 
+              {/* Grok / Groq Models (Ultra-Fast Cloud) */}
+              <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-bold text-emerald-600 uppercase tracking-wider flex items-center justify-between">
+                <span>Grok / Groq (Ultra-Fast)</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">Active</span>
+              </div>
+              <div className="space-y-0.5">
+                {groqModels.map((m) => {
+                  const isSelected = (activeModel?.provider === 'groq' || activeModel?.provider === 'grok') && activeModel?.model === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        onSwitchModel?.(m.provider, m.id);
+                        setShowModelMenu(false);
+                        setToastMessage(`Switched AI Model to ${m.name || m.id}`);
+                        setTimeout(() => setToastMessage(null), 3000);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-500/10 text-emerald-900 font-bold border border-emerald-500/30'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{getModelIcon(m)}</span>
+                        <div>
+                          <div className="font-semibold text-slate-900 leading-tight">{m.name || m.id}</div>
+                          <div className="text-[10px] text-slate-400 font-normal">{m.badge || 'Cloud LLM'}</div>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span className="material-symbols-outlined text-emerald-600 text-sm font-bold">check</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Local Ollama Models */}
-              <div className="px-2 pt-1.5 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="px-2 pt-2 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-t border-slate-100 mt-1">
                 Local Models (Ollama)
               </div>
               <div className="space-y-0.5">
@@ -1882,7 +1935,7 @@ Evaluating the relationship between CAC and return multiplier across individual 
                         handleSend();
                       }
                     }}
-                    placeholder="Build anything..."
+                    placeholder="Ask anything..."
                     disabled={isSending || isStreaming}
                     className="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 font-normal outline-none resize-none pt-0.5 pb-0.5 leading-relaxed min-h-[38px] max-h-32"
                   />
@@ -1943,11 +1996,13 @@ Evaluating the relationship between CAC and return multiplier across individual 
                       className={`px-2.5 sm:px-3 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 border transition-all select-none shadow-2xs cursor-pointer ${
                         showModelMenu
                           ? 'bg-amber-500/20 text-amber-900 border-amber-500/40'
+                          : isGroqModel
+                          ? 'bg-emerald-500/10 text-emerald-900 border-emerald-500/30 hover:bg-emerald-500/20'
                           : isLocalModel
                           ? 'bg-amber-500/10 text-amber-900 border-amber-500/30 hover:bg-amber-500/20'
                           : 'bg-indigo-500/10 text-indigo-900 border-indigo-500/30 hover:bg-indigo-500/20'
                       }`}
-                      title="Switch active AI model (Llama / Ollama, Gemini, Deterministic)"
+                      title="Switch active AI model (Grok / Groq, Llama / Ollama, Gemini, Deterministic)"
                     >
                       <span className="text-xs">{getModelIcon(activeModel)}</span>
                       <span className="truncate max-w-[85px] sm:max-w-[125px] font-medium">{activeModelLabel}</span>

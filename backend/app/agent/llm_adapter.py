@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Type, TypeVar
 import json
 import logging
+import os
 import httpx
 from pydantic import BaseModel, ValidationError
 
@@ -80,6 +81,85 @@ class LLMAdapter(ABC):
             raise LLMResponseValidationError(
                 f"LLM output did not conform to schema {response_model.__name__}: {e}\nRaw output: {raw_text}"
             ) from e
+
+
+class GroqAdapter(LLMAdapter):
+    """
+    Groq Cloud AI adapter using ultra-fast OpenAI-compatible REST API.
+    Supports Grok / Groq models (e.g. openai/gpt-oss-120b, openai/gpt-oss-20b, qwen/qwen3.8-27b).
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout_seconds: float = 45.0,
+    ):
+        self.api_key = (
+            api_key
+            if api_key is not None
+            else (getattr(settings, "GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY") or os.getenv("GROK_API_KEY"))
+        )
+        self.model = model or getattr(settings, "GROQ_MODEL", None) or "openai/gpt-oss-120b"
+        self.timeout_seconds = timeout_seconds
+        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+
+        if not self.api_key:
+            logger.warning("GroqAdapter initialized without GROQ_API_KEY.")
+
+    def generate(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        response_mime_type: str = "text/plain",
+    ) -> str:
+        if not self.api_key:
+            raise LLMAuthenticationError("GROQ_API_KEY is not configured.")
+
+        messages: list[dict[str, str]] = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.2,
+        }
+
+        if response_mime_type == "application/json":
+            payload["response_format"] = {"type": "json_object"}
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.post(self.base_url, headers=headers, json=payload)
+        except httpx.RequestError as e:
+            raise LLMError(f"Network error communicating with Groq API: {e}") from e
+
+        if response.status_code in (400, 401, 403):
+            raise LLMAuthenticationError(
+                f"Groq API authentication/request error ({response.status_code}): {response.text}"
+            )
+        elif response.status_code != 200:
+            raise LLMError(f"Groq API returned HTTP {response.status_code}: {response.text}")
+
+        data = response.json()
+        try:
+            choices = data.get("choices", [])
+            if not choices:
+                raise LLMError(f"No response choices returned by Groq: {data}")
+
+            return choices[0].get("message", {}).get("content", "")
+        except (KeyError, IndexError) as e:
+            raise LLMError(f"Failed to parse Groq response payload: {e}") from e
+
+
+GrokAdapter = GroqAdapter
 
 
 class GeminiAdapter(LLMAdapter):
@@ -294,16 +374,19 @@ import sys
 
 # Global runtime active configuration (can be updated dynamically via UI/API)
 _RUNTIME_MODEL_CONFIG: dict[str, str] = {
-    "provider": "mock" if "pytest" in sys.modules else getattr(settings, "LLM_PROVIDER", "gemini"),
-    "model": getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash"),
+    "provider": "mock" if "pytest" in sys.modules else getattr(settings, "LLM_PROVIDER", "groq"),
+    "model": getattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b"),
 }
 
 
 def set_runtime_model(provider: str, model: str) -> dict[str, str]:
     """Updates the active LLM provider and model for the entire system."""
-    _RUNTIME_MODEL_CONFIG["provider"] = provider
+    norm_provider = (provider or "").lower()
+    if norm_provider in ("grok", "groq"):
+        norm_provider = "groq"
+    _RUNTIME_MODEL_CONFIG["provider"] = norm_provider
     _RUNTIME_MODEL_CONFIG["model"] = model
-    logger.info(f"Switched active AI model to: provider={provider}, model={model}")
+    logger.info(f"Switched active AI model to: provider={norm_provider}, model={model}")
     return dict(_RUNTIME_MODEL_CONFIG)
 
 
@@ -314,6 +397,12 @@ def get_runtime_model() -> dict[str, str]:
 
 def get_available_models() -> dict[str, Any]:
     """Inspects system and returns available models and providers."""
+    groq_models = [
+        {"id": "openai/gpt-oss-120b", "name": "Grok / Groq 120B (High Accuracy)", "provider": "groq", "badge": "High Accuracy", "family": "groq"},
+        {"id": "openai/gpt-oss-20b", "name": "Grok / Groq 20B (Fast)", "provider": "groq", "badge": "Ultra Fast", "family": "groq"},
+        {"id": "qwen/qwen3.8-27b", "name": "Qwen 3.8 27B (Groq)", "provider": "groq", "badge": "Reasoning", "family": "groq"},
+    ]
+
     ollama_models = []
     ollama_online = False
     try:
@@ -355,6 +444,7 @@ def get_available_models() -> dict[str, Any]:
         "active_model": current["model"],
         "ollama_online": ollama_online,
         "models": [
+            *groq_models,
             *ollama_models,
             *cloud_models,
             {"id": "deterministic", "name": "Deterministic Engine (No LLM)", "provider": "mock", "badge": "Grounded Tool Truth", "family": "tools"},
@@ -367,19 +457,24 @@ def get_llm_adapter(
     model: Optional[str] = None,
 ) -> LLMAdapter:
     """Factory function to get the configured LLM adapter."""
-    selected_provider = provider or _RUNTIME_MODEL_CONFIG.get("provider") or settings.LLM_PROVIDER
+    selected_provider = (provider or _RUNTIME_MODEL_CONFIG.get("provider") or getattr(settings, "LLM_PROVIDER", "groq")).lower()
     selected_model = model or _RUNTIME_MODEL_CONFIG.get("model")
 
-    if selected_provider == "ollama":
+    if selected_provider in ("groq", "grok"):
+        return GroqAdapter(model=selected_model)
+    elif selected_provider == "ollama":
         return OllamaAdapter(model=selected_model)
     elif selected_provider == "gemini":
         return GeminiAdapter(model=selected_model)
     elif selected_provider == "mock" or selected_model == "deterministic":
         return MockLLMAdapter()
     elif provider is not None:
-        raise ValueError(f"Unsupported LLM provider: '{provider}'. Supported: 'ollama', 'gemini', 'mock'.")
+        raise ValueError(f"Unsupported LLM provider: '{provider}'. Supported: 'groq', 'grok', 'ollama', 'gemini', 'mock'.")
     else:
-        # Fallback to Ollama or Gemini based on availability
+        # Fallback hierarchy: Groq -> Ollama -> Gemini
+        groq_key = getattr(settings, "GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY") or os.getenv("GROK_API_KEY")
+        if groq_key:
+            return GroqAdapter(model=selected_model)
         try:
             ollama = OllamaAdapter(model=selected_model)
             if ollama.is_available():

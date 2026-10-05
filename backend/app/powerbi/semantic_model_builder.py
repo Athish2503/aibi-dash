@@ -68,7 +68,8 @@ class SemanticModelBuilder:
         if measure.dax_expression and measure.dax_expression.strip():
             return measure.dax_expression.strip()
 
-        col_ref = f"'{table_name}'[{measure.column}]"
+        col_name = measure.column or ""
+        col_ref = f"'{table_name}'[{col_name}]"
         agg = measure.aggregation
 
         if agg == AggregationType.SUM:
@@ -172,7 +173,7 @@ class SemanticModelBuilder:
                     name=m.name,
                     expression=expr,
                     formatString=fmt,
-                    description=m.description or f"{m.aggregation.value} of {m.column}",
+                    description=m.description or (f"{m.aggregation.value} of {m.column}" if m.column else m.name),
                 )
             )
 
