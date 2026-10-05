@@ -8,6 +8,7 @@ export default function Navbar({
   availableModels = [],
   ollamaOnline = false,
   onSwitchModel,
+  onToggleGrowthStudio,
 }) {
   const isHealthy = health?.status === 'healthy';
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -62,6 +63,16 @@ export default function Navbar({
           <span className="font-bold text-base text-on-surface tracking-tight hidden sm:inline">
             AI Power BI Studio
           </span>
+          {onToggleGrowthStudio && (
+            <button
+              type="button"
+              onClick={onToggleGrowthStudio}
+              className="ml-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">trending_up</span>
+              <span>Growth Studio</span>
+            </button>
+          )}
         </div>
       </div>
 

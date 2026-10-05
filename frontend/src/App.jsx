@@ -10,6 +10,7 @@ import AIChat from './components/AIChat';
 import DaxStudio from './components/DaxStudio';
 import DatasetComparator from './components/DatasetComparator';
 import ErrorBoundary from './components/ErrorBoundary';
+import GrowthStudioApp from './growth-studio/GrowthStudioApp';
 import {
   checkHealth,
   uploadAndProcessPipeline,
@@ -21,6 +22,7 @@ import {
 } from './services/api';
 
 export default function App() {
+  const [isClassicMode, setIsClassicMode] = useState(false);
   const [currentStage, setCurrentStage] = useState(1);
   const [health, setHealth] = useState(null);
 
@@ -266,6 +268,15 @@ export default function App() {
     });
   };
 
+  if (!isClassicMode) {
+    return (
+      <GrowthStudioApp
+        isClassicMode={isClassicMode}
+        onToggleClassicMode={() => setIsClassicMode(!isClassicMode)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans">
       {/* Minimal Header */}
@@ -277,6 +288,7 @@ export default function App() {
         availableModels={availableModels}
         ollamaOnline={ollamaOnline}
         onSwitchModel={handleSwitchModel}
+        onToggleGrowthStudio={() => setIsClassicMode(false)}
       />
 
       {/* Simplified 5-item Sidebar */}
