@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * StudioNavigation - Global header & journey progress tracker for AI Growth Strategy Studio.
+ * StudioNavigation - Global header & journey progress tracker for AI Growth Strategy Studio (Phase 2 Enhanced).
  * Organizes the 10-step flow into Discovery, Intelligence, and Execution phases.
  */
 export default function StudioNavigation({
@@ -10,10 +10,13 @@ export default function StudioNavigation({
   companyName,
   primaryObjective,
   isGenerated,
+  activePersona,
   onResetStrategy,
   onLoadDemo,
   isClassicMode,
   onToggleClassicMode,
+  onOpenAsk,
+  onOpenWhatIf,
 }) {
   const stages = [
     // Phase 1: Setup & Discovery
@@ -50,7 +53,7 @@ export default function StudioNavigation({
                 AI Growth Strategy Studio
               </span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase">
-                Phase 1
+                Phase 2
               </span>
             </div>
             {companyName && (
@@ -63,6 +66,30 @@ export default function StudioNavigation({
 
         {/* Right Action Tools */}
         <div className="flex items-center gap-2">
+          {/* Quick Shortcuts for Ask & What-If when strategy is generated */}
+          {isGenerated && (
+            <div className="hidden lg:flex items-center gap-1.5 mr-2">
+              <button
+                type="button"
+                onClick={onOpenAsk}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold border border-blue-200 cursor-pointer"
+                title="Ask about your business"
+              >
+                <span className="material-symbols-outlined text-xs">psychology</span>
+                <span>Ask Strategy</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenWhatIf}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 cursor-pointer"
+                title="Launch What-If Scenario Analysis"
+              >
+                <span className="material-symbols-outlined text-xs">tune</span>
+                <span>What-If</span>
+              </button>
+            </div>
+          )}
+
           {/* Quick Demo Loader */}
           <button
             type="button"

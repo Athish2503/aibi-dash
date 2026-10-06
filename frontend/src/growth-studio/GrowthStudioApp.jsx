@@ -10,16 +10,20 @@ import AudienceIntelligenceScreen from './components/AudienceIntelligenceScreen'
 import ContentIntelligenceScreen from './components/ContentIntelligenceScreen';
 import OpportunityCenterScreen from './components/OpportunityCenterScreen';
 import ActionPlanScreen from './components/ActionPlanScreen';
+import AskStrategyModal from './components/AskStrategyModal';
+import WhatIfScenarioModal from './components/WhatIfScenarioModal';
 
 import {
   DEFAULT_DEMO_COMPANY,
   generatePersonalizedStrategy,
+  rankRecommendations,
 } from './data/mockStudioData';
 
 /**
- * GrowthStudioApp - Main application orchestrator for AI Growth Strategy Studio.
+ * GrowthStudioApp - Main application orchestrator for AI Growth Strategy Studio (Phase 2 Enhanced).
  * Enforces the core loop: Understand → Analyze → Generate → Prioritize → Act → Measure
- * Coordinates the 10-step journey, cross-stage filtering, and persistent 90-day plan state.
+ * Coordinates the 10-step journey, strategy personas, dashboard modes, natural language control,
+ * What-If scenario simulations, and interactive strategy Q&A.
  */
 export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) {
   // Current active screen in the 10-step flow
@@ -40,15 +44,26 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
   const [selectedObjectives, setSelectedObjectives] = useState(['leads', 'conversion', 'search']);
   const [primaryObjective, setPrimaryObjective] = useState('leads');
 
-  // Strategy Configuration state
+  // Strategy Configuration state (Phase 2 Enhanced)
   const [strategyConfig, setStrategyConfig] = useState({
     primaryFocus: 'Leads',
     targetAudience: 'Enterprise',
     depth: 'Balanced',
     format: 'Executive',
+    persona: 'Founder',
     includes: ['website', 'seo', 'content', 'ai_discoverability', 'competitor_analysis', 'campaign_ideas'],
     additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
   });
+
+  // Phase 2 Personalization State
+  const [activePersona, setActivePersona] = useState('Founder');
+  const [dashboardMode, setDashboardMode] = useState('Executive');
+  const [dashboardDensity, setDashboardDensity] = useState('Balanced');
+  const [visualEmphasis, setVisualEmphasis] = useState('Opportunities');
+
+  // Global Dialogs State
+  const [isAskModalOpen, setIsAskModalOpen] = useState(false);
+  const [isWhatIfModalOpen, setIsWhatIfModalOpen] = useState(false);
 
   // Generated Strategy analytical model
   const [strategyData, setStrategyData] = useState(null);
@@ -67,27 +82,22 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
     setCompanyData(demoCompany);
     setSelectedObjectives(['leads', 'conversion', 'search', 'ai_visibility']);
     setPrimaryObjective('leads');
-    setStrategyConfig({
+    const updatedConfig = {
       primaryFocus: 'Leads',
       targetAudience: 'Enterprise',
       depth: 'Balanced',
       format: 'Executive',
+      persona: activePersona || 'Founder',
       includes: ['website', 'seo', 'content', 'ai_discoverability', 'competitor_analysis', 'campaign_ideas'],
       additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
-    });
+    };
+    setStrategyConfig(updatedConfig);
 
     const generated = generatePersonalizedStrategy({
       company: demoCompany,
       objectives: ['leads', 'conversion', 'search', 'ai_visibility'],
       primaryObjective: 'leads',
-      config: {
-        primaryFocus: 'Leads',
-        targetAudience: 'Enterprise',
-        depth: 'Balanced',
-        format: 'Executive',
-        includes: ['website', 'seo', 'content', 'ai_discoverability', 'competitor_analysis', 'campaign_ideas'],
-        additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
-      },
+      config: updatedConfig,
     });
 
     setStrategyData(generated);
@@ -106,7 +116,6 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
     setSelectedObjectives((prev) => {
       const exists = prev.includes(id);
       const updated = exists ? prev.filter((o) => o !== id) : [...prev, id];
-      // If we removed the primary objective, reset primary to first remaining or default
       if (exists && primaryObjective === id && updated.length > 0) {
         setPrimaryObjective(updated[0]);
       }
@@ -132,16 +141,40 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
       config: strategyConfig,
     });
 
+    setActivePersona(strategyConfig.persona || 'Founder');
     setStrategyData(generated);
     setPlanTasks(generated.initialPlanTasks);
     setIsGenerated(true);
     setCurrentStage('executive-overview');
   };
 
-  // 6. Action Plan Task Management
+  // 6. Dynamic Persona Switcher without mutating source data (Requirement 2)
+  const handleChangePersona = (newPersonaId) => {
+    setActivePersona(newPersonaId);
+    setStrategyConfig((prev) => ({ ...prev, persona: newPersonaId }));
+
+    if (strategyData) {
+      // Re-rank opportunities and update lens without changing underlying metrics
+      const reRanked = rankRecommendations({
+        opportunities: strategyData.opportunities,
+        primaryObjective: strategyData.primaryObjective,
+        targetAudience: strategyData.config.targetAudience,
+        persona: newPersonaId,
+        businessHealth: strategyData.businessHealth,
+        preferences: strategyData.config.parsedPreferences || {},
+      });
+
+      setStrategyData((prev) => ({
+        ...prev,
+        activePersona: newPersonaId,
+        opportunities: reRanked,
+      }));
+    }
+  };
+
+  // 7. Action Plan Task Management
   const handleAddTaskToPlan = (newTask) => {
     setPlanTasks((prev) => {
-      // Don't add duplicate IDs
       if (prev.some((t) => t.id === newTask.id)) return prev;
       return [newTask, ...prev];
     });
@@ -179,10 +212,13 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
         companyName={companyData.name || strategyData?.company?.name}
         primaryObjective={strategyData?.primaryObjective || primaryObjective}
         isGenerated={isGenerated}
+        activePersona={activePersona}
         onResetStrategy={handleResetStrategy}
         onLoadDemo={handleExploreDemo}
         isClassicMode={isClassicMode}
         onToggleClassicMode={onToggleClassicMode}
+        onOpenAsk={() => setIsAskModalOpen(true)}
+        onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
       />
 
       {/* Main View Area */}
@@ -244,6 +280,14 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
             strategyData={strategyData}
             onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
             onAddFindingToPlan={handleAddTaskToPlan}
+            activePersona={activePersona}
+            onChangePersona={handleChangePersona}
+            dashboardMode={dashboardMode}
+            onChangeMode={setDashboardMode}
+            dashboardDensity={dashboardDensity}
+            onChangeDensity={setDashboardDensity}
+            visualEmphasis={visualEmphasis}
+            onChangeEmphasis={setVisualEmphasis}
           />
         )}
 
@@ -286,6 +330,20 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
           />
         )}
       </main>
+
+      {/* Global Interactive Modals */}
+      <AskStrategyModal
+        isOpen={isAskModalOpen}
+        onClose={() => setIsAskModalOpen(false)}
+        strategyData={strategyData}
+        onAddActionToPlan={handleAddTaskToPlan}
+        addedPlanTaskIds={planTasks.map((t) => t.id)}
+      />
+
+      <WhatIfScenarioModal
+        isOpen={isWhatIfModalOpen}
+        onClose={() => setIsWhatIfModalOpen(false)}
+      />
     </div>
   );
 }

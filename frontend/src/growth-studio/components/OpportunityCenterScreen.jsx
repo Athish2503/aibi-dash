@@ -2,9 +2,19 @@ import React, { useState } from 'react';
 import OpportunityDetailModal from './OpportunityDetailModal';
 
 /**
- * OpportunityCenterScreen - Screen 10 in AI Growth Strategy Studio
- * The central decision engine displaying visual opportunity cards with multi-faceted filtering,
- * deep-dive modal analysis, and direct "Add to Plan" execution.
+ * OpportunityCenterScreen - Screen 10 in AI Growth Strategy Studio (Phase 2 Enhanced)
+ * Ranks initiatives using the multi-factor recommendation engine.
+ * Supports inline expandable details showing:
+ * 1. Current state
+ * 2. Evidence
+ * 3. Business impact
+ * 4. Audience affected
+ * 5. Competitive context
+ * 6. Recommended action
+ * 7. Estimated effort
+ * 8. Expected value
+ * 9. Dependencies
+ * Plus direct "Add to 90-Day Plan" execution.
  */
 export default function OpportunityCenterScreen({
   strategyData,
@@ -17,12 +27,20 @@ export default function OpportunityCenterScreen({
   const [selectedImpact, setSelectedImpact] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeModalOpp, setActiveModalOpp] = useState(null);
+  const [expandedCardIds, setExpandedCardIds] = useState({});
 
-  const { opportunities = [], company = {} } = strategyData;
+  const { opportunities = [], company = {}, activePersona = 'Founder' } = strategyData;
 
   const categories = ['All', 'Website', 'Content', 'Audience', 'SEO', 'AI Visibility', 'Conversion'];
   const priorities = ['All', 'P1 — Critical', 'P2 — High', 'P3 — Medium'];
   const impactLevels = ['All', 'High', 'Medium'];
+
+  const toggleCardExpand = (id) => {
+    setExpandedCardIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   const filteredOpportunities = opportunities.filter((opp) => {
     if (selectedCategory !== 'All' && opp.category !== selectedCategory) return false;
@@ -31,8 +49,8 @@ export default function OpportunityCenterScreen({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = opp.title.toLowerCase().includes(q);
-      const matchWhy = opp.whyThisMatters.toLowerCase().includes(q);
-      const matchAction = opp.recommendedAction.toLowerCase().includes(q);
+      const matchWhy = (opp.whyThisMatters || '').toLowerCase().includes(q);
+      const matchAction = (opp.recommendedAction || '').toLowerCase().includes(q);
       if (!matchTitle && !matchWhy && !matchAction) return false;
     }
     return true;
@@ -44,8 +62,8 @@ export default function OpportunityCenterScreen({
       task: opp.title,
       category: opp.category,
       priority: opp.priority,
-      expectedImpact: opp.whyThisMatters,
-      effort: opp.effortWeeks,
+      expectedImpact: opp.businessImpact || opp.whyThisMatters,
+      effort: opp.effortWeeks || opp.estimatedEffort,
       status: 'todo',
       month: opp.priority.includes('P1') ? 1 : opp.priority.includes('P2') ? 2 : 3,
       monthTitle: opp.priority.includes('P1')
@@ -68,12 +86,16 @@ export default function OpportunityCenterScreen({
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-xs text-slate-500">{company.name}</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              Perspective: {activePersona}
+            </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
             Opportunity Center
           </h1>
           <p className="text-sm text-slate-600 mt-0.5">
-            Prioritized business growth initiatives ranked by impact, relevance, and execution effort.
+            Ranked initiatives synthesized across primary objective, persona lens, and verified business health.
           </p>
         </div>
 
@@ -168,24 +190,31 @@ export default function OpportunityCenterScreen({
           Showing <strong>{filteredOpportunities.length}</strong> of {opportunities.length} Growth Opportunities
         </span>
         <span className="text-[11px] text-slate-400">
-          Ranked by multi-factor score (Impact × Relevance ÷ Effort)
+          Ranked by multi-factor score (Impact × Relevance ÷ Effort + Persona Lens)
         </span>
       </div>
 
-      {/* Opportunity Cards Grid (Visual, NOT plain table) */}
+      {/* Opportunity Cards Grid (Expandable Inline & Modal Deep-Dive) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {filteredOpportunities.map((opp) => {
-          const isPlanned = plannedTaskIds.includes(`opp-${opp.id}`);
+        {filteredOpportunities.map((opp, idx) => {
+          const isPlanned =
+            plannedTaskIds.includes(`opp-${opp.id}`) ||
+            plannedTaskIds.includes(opp.id);
+          const isExpanded = !!expandedCardIds[opp.id];
 
           return (
             <div
               key={opp.id}
-              className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+              className={`bg-white rounded-3xl border transition-all flex flex-col justify-between overflow-hidden ${
+                isExpanded
+                  ? 'border-blue-400 shadow-md ring-1 ring-blue-100'
+                  : 'border-slate-200/90 shadow-2xs hover:shadow-sm'
+              }`}
             >
-              <div>
+              <div className="p-6">
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 uppercase tracking-wider">
                       {opp.category}
                     </span>
@@ -198,17 +227,30 @@ export default function OpportunityCenterScreen({
                     >
                       {opp.priority}
                     </span>
+                    {idx === 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 uppercase">
+                        ★ #1 Top Recommendation
+                      </span>
+                    )}
                   </div>
 
-                  <span className="text-xs font-extrabold text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
-                    {opp.relevanceScore} / 100 Relevance
+                  <span className="text-xs font-extrabold text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100 font-mono">
+                    Score: {opp.dynamicScore || opp.relevanceScore}
                   </span>
                 </div>
 
                 {/* Title */}
-                <h3 className="text-lg font-bold text-slate-900 leading-snug mb-3">
+                <h3 className="text-lg font-bold text-slate-900 leading-snug mb-2">
                   {opp.title}
                 </h3>
+
+                {/* Persona Ranking Reason / Explanations */}
+                {opp.personaExplanation && (
+                  <div className="mb-3 px-2.5 py-1 rounded-lg bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-1.5 font-medium">
+                    <span className="material-symbols-outlined text-xs text-amber-700">stars</span>
+                    <span>{opp.personaExplanation}</span>
+                  </div>
+                )}
 
                 {/* 4-Metric Grid */}
                 <div className="grid grid-cols-4 gap-2 mb-4 p-2.5 rounded-2xl bg-slate-50 border border-slate-200/70 text-center">
@@ -230,52 +272,156 @@ export default function OpportunityCenterScreen({
                   </div>
                 </div>
 
-                {/* Why this matters */}
-                <div className="mb-3">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-                    Why this matters
-                  </span>
-                  <p className="text-xs text-slate-600 leading-relaxed bg-amber-50/40 p-2.5 rounded-xl border border-amber-100/80">
-                    {opp.whyThisMatters}
-                  </p>
-                </div>
+                {/* Summary View (Collapsed State) */}
+                {!isExpanded && (
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                        Why this matters
+                      </span>
+                      <p className="text-xs text-slate-600 leading-relaxed bg-amber-50/40 p-2.5 rounded-xl border border-amber-100/80">
+                        {opp.whyThisMatters}
+                      </p>
+                    </div>
 
-                {/* Recommended action */}
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
-                    Recommended Action
-                  </span>
-                  <p className="text-xs text-blue-900 font-medium leading-relaxed bg-blue-50/40 p-2.5 rounded-xl border border-blue-100/80">
-                    {opp.recommendedAction}
-                  </p>
-                </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1">
+                        Recommended Action
+                      </span>
+                      <p className="text-xs text-blue-900 font-medium leading-relaxed bg-blue-50/40 p-2.5 rounded-xl border border-blue-100/80">
+                        {opp.recommendedAction}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded Inline Details (Requirement 5: All 9 Fields) */}
+                {isExpanded && (
+                  <div className="space-y-3 pt-2 border-t border-slate-100 text-xs animate-fade-in">
+                    {/* 1. Current State */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
+                        1. Current State
+                      </span>
+                      <p className="text-slate-700">{opp.currentState}</p>
+                    </div>
+
+                    {/* 2. Evidence */}
+                    <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200">
+                      <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block mb-0.5">
+                        2. Audited Evidence
+                      </span>
+                      <p className="text-amber-900">{opp.evidence || opp.whyThisMatters}</p>
+                    </div>
+
+                    {/* 3. Business Impact & 4. Audience Affected */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                        <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block mb-0.5">
+                          3. Business Impact
+                        </span>
+                        <p className="text-emerald-950 font-semibold">{opp.businessImpact}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200">
+                        <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block mb-0.5">
+                          4. Audience Affected
+                        </span>
+                        <p className="text-purple-950 font-medium">{opp.audienceAffected}</p>
+                      </div>
+                    </div>
+
+                    {/* 5. Competitive Context */}
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
+                        5. Competitive Context
+                      </span>
+                      <p className="text-slate-700">{opp.competitiveContext}</p>
+                    </div>
+
+                    {/* 6. Recommended Action */}
+                    <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200">
+                      <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider block mb-0.5">
+                        6. Recommended Action
+                      </span>
+                      <p className="text-blue-950 font-bold">{opp.recommendedAction}</p>
+                    </div>
+
+                    {/* 7. Estimated Effort & 8. Expected Value */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">
+                          7. Estimated Effort
+                        </span>
+                        <p className="text-slate-800 font-mono font-bold">{opp.estimatedEffort || opp.effortWeeks}</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block mb-0.5">
+                          8. Expected Value
+                        </span>
+                        <p className="text-emerald-950 font-mono font-bold">{opp.expectedValue}</p>
+                      </div>
+                    </div>
+
+                    {/* 9. Dependencies */}
+                    {opp.dependencies && (
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                          9. Key Dependencies
+                        </span>
+                        <ul className="space-y-1">
+                          {opp.dependencies.map((dep, dIdx) => (
+                            <li key={dIdx} className="text-slate-600 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                              <span>{dep}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveModalOpp(opp)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-700 hover:text-slate-900 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">visibility</span>
-                  <span>View Analysis</span>
-                </button>
+              {/* Action Buttons & Expand Toggle */}
+              <div className="px-6 py-4 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {/* Inline Expand Toggle (Requirement 5) */}
+                  <button
+                    type="button"
+                    onClick={() => toggleCardExpand(opp.id)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      {isExpanded ? 'expand_less' : 'expand_more'}
+                    </span>
+                    <span>{isExpanded ? 'Collapse' : 'Details'}</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setActiveModalOpp(opp)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-pointer ml-1"
+                  >
+                    <span className="material-symbols-outlined text-sm">open_in_new</span>
+                    <span>Full Modal</span>
+                  </button>
+                </div>
+
+                {/* Add to 90-Day Plan (Requirement 5) */}
                 <button
                   type="button"
                   onClick={() => handleAddCardToPlan(opp)}
                   disabled={isPlanned}
                   className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isPlanned
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
                   }`}
                 >
                   <span className="material-symbols-outlined text-xs">
                     {isPlanned ? 'check_circle' : 'add_task'}
                   </span>
-                  <span>{isPlanned ? 'Added to Plan' : 'Add to Plan'}</span>
+                  <span>{isPlanned ? 'Added to Plan' : 'Add to 90-Day Plan'}</span>
                 </button>
               </div>
             </div>
@@ -283,33 +429,16 @@ export default function OpportunityCenterScreen({
         })}
       </div>
 
-      {filteredOpportunities.length === 0 && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center">
-          <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">filter_list_off</span>
-          <h3 className="text-base font-bold text-slate-800">No opportunities match your filter</h3>
-          <p className="text-xs text-slate-500 mt-1">Try resetting the category or priority filters.</p>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory('All');
-              setSelectedPriority('All');
-              setSelectedImpact('All');
-              setSearchQuery('');
-            }}
-            className="mt-4 px-4 py-2 rounded-xl bg-blue-50 text-blue-700 font-semibold text-xs hover:bg-blue-100"
-          >
-            Reset Filters
-          </button>
-        </div>
-      )}
-
-      {/* Deep Dive Analysis Modal */}
+      {/* Deep-Dive Modal View */}
       {activeModalOpp && (
         <OpportunityDetailModal
           opportunity={activeModalOpp}
           onClose={() => setActiveModalOpp(null)}
           onAddToPlan={handleAddCardToPlan}
-          isInPlan={plannedTaskIds.includes(`opp-${activeModalOpp.id}`)}
+          isInPlan={
+            plannedTaskIds.includes(`opp-${activeModalOpp.id}`) ||
+            plannedTaskIds.includes(activeModalOpp.id)
+          }
         />
       )}
     </div>
