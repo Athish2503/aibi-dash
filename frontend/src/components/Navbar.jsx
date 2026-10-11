@@ -61,7 +61,7 @@ export default function Navbar({
             BI
           </div>
           <span className="font-bold text-base text-on-surface tracking-tight hidden sm:inline">
-            AI Power BI Studio
+            PowerGen BI
           </span>
           {onToggleGrowthStudio && (
             <button

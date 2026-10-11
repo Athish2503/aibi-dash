@@ -92,7 +92,7 @@ CMP-110,PaySwift,Search,SMB Owners,42,Google Ads,4600,4.75,8.3,North America`;
     <div className="max-w-2xl mx-auto py-12 flex flex-col items-center text-center animate-fade-in">
       {/* Title & Subtitle */}
       <h1 className="text-2xl md:text-3xl font-bold text-on-surface tracking-tight">
-        AI POWER BI DASHBOARD GENERATOR
+        PowerGen BI
       </h1>
       <p className="text-sm text-secondary mt-2 mb-8">
         Turn your CSV data into an intelligent BI dashboard

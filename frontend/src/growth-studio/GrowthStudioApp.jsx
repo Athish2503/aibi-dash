@@ -1,17 +1,27 @@
 import React, { useState } from 'react';
 import StudioNavigation from './components/StudioNavigation';
-import WelcomeScreen from './components/WelcomeScreen';
-import CompanySetupScreen from './components/CompanySetupScreen';
-import GrowthObjectiveScreen from './components/GrowthObjectiveScreen';
-import StrategyConfigScreen from './components/StrategyConfigScreen';
-import GenerationScreen from './components/GenerationScreen';
-import ExecutiveOverviewScreen from './components/ExecutiveOverviewScreen';
+import StrategicBriefingScreen from './components/StrategicBriefingScreen';
+import ExecutiveStrategyScreen from './components/ExecutiveStrategyScreen';
+import IntelligenceScreen from './components/IntelligenceScreen';
+import CompanyKnowledgeScreen from './components/CompanyKnowledgeScreen';
+import AdaptiveInterviewScreen from './components/AdaptiveInterviewScreen';
 import AudienceIntelligenceScreen from './components/AudienceIntelligenceScreen';
 import ContentIntelligenceScreen from './components/ContentIntelligenceScreen';
 import OpportunityCenterScreen from './components/OpportunityCenterScreen';
 import ActionPlanScreen from './components/ActionPlanScreen';
+import StrategyConfigScreen from './components/StrategyConfigScreen';
+import GenerationScreen from './components/GenerationScreen';
+
+// Modals
 import AskStrategyModal from './components/AskStrategyModal';
 import WhatIfScenarioModal from './components/WhatIfScenarioModal';
+import ChallengeStrategyModal from './components/ChallengeStrategyModal';
+import DemoStoryTourModal from './components/DemoStoryTourModal';
+import CompanySelectorModal from './components/CompanySelectorModal';
+import ContextSwitchingAnimationModal from './components/ContextSwitchingAnimationModal';
+
+import { defaultBIService } from './services/BIService';
+import { defaultAIService } from './services/AIService';
 
 import {
   DEFAULT_DEMO_COMPANY,
@@ -20,31 +30,34 @@ import {
 } from './data/mockStudioData';
 
 /**
- * GrowthStudioApp - Main application orchestrator for AI Growth Strategy Studio (Phase 2 Enhanced).
- * Enforces the core loop: Understand → Analyze → Generate → Prioritize → Act → Measure
- * Coordinates the 10-step journey, strategy personas, dashboard modes, natural language control,
- * What-If scenario simulations, and interactive strategy Q&A.
+ * GrowthStudioApp - Main Application Orchestrator
+ * 
+ * Enforces the primary product loop:
+ * Understand → Ask → Research → Analyze → Verify → Explain → Recommend → Prioritize → Act → Measure → Learn
+ * 
+ * Architecture:
+ * - STRATEGY Mode: "What should we do?"
+ * - INTELLIGENCE Mode: "What is happening and why?"
+ * - Navigation: Home, Strategy, Intelligence, Audience, Content, Opportunities, Plan, Company Knowledge
  */
-export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) {
-  // Current active screen in the 10-step flow
-  const [currentStage, setCurrentStage] = useState('welcome');
+export default function GrowthStudioApp({
+  isClassicMode,
+  onToggleClassicMode,
+  uploadedFile = null,
+  pipelineData = null,
+  datasetRows = [],
+}) {
+  // Navigation active screen: default to 'home' (Strategic Briefing)
+  const [currentStage, setCurrentStage] = useState('home');
 
   // Company Profile state
-  const [companyData, setCompanyData] = useState({
-    name: '',
-    industry: '',
-    description: '',
-    products: '',
-    targetAudience: '',
-    targetGeography: '',
-    websiteUrl: '',
-  });
+  const [companyData, setCompanyData] = useState(DEFAULT_DEMO_COMPANY);
 
   // Objectives state
   const [selectedObjectives, setSelectedObjectives] = useState(['leads', 'conversion', 'search']);
   const [primaryObjective, setPrimaryObjective] = useState('leads');
 
-  // Strategy Configuration state (Phase 2 Enhanced)
+  // Strategy Configuration state
   const [strategyConfig, setStrategyConfig] = useState({
     primaryFocus: 'Leads',
     targetAudience: 'Enterprise',
@@ -55,84 +68,152 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
     additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
   });
 
-  // Phase 2 Personalization State
+  // Strategy Persona (Requirement 12)
   const [activePersona, setActivePersona] = useState('Founder');
-  const [dashboardMode, setDashboardMode] = useState('Executive');
-  const [dashboardDensity, setDashboardDensity] = useState('Balanced');
-  const [visualEmphasis, setVisualEmphasis] = useState('Opportunities');
 
   // Global Dialogs State
   const [isAskModalOpen, setIsAskModalOpen] = useState(false);
   const [isWhatIfModalOpen, setIsWhatIfModalOpen] = useState(false);
+  const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+  const [isDemoTourOpen, setIsDemoTourOpen] = useState(false);
+  const [isCompanySelectorOpen, setIsCompanySelectorOpen] = useState(false);
 
-  // Generated Strategy analytical model
-  const [strategyData, setStrategyData] = useState(null);
-  const [isGenerated, setIsGenerated] = useState(false);
+  // Context Switching Animation & Notification State
+  const [isSwitchingAnimationOpen, setIsSwitchingAnimationOpen] = useState(false);
+  const [pendingContextSwitch, setPendingContextSwitch] = useState(null);
+  const [contextNotification, setContextNotification] = useState(null);
 
-  // 90-Day Action Plan persistent tasks
-  const [planTasks, setPlanTasks] = useState([]);
-
-  // 1. Actions from Welcome Screen
-  const handleStartStrategy = () => {
-    setCurrentStage('company-setup');
+  // Handle Dynamic Company Switching or Custom Dataset Ingestion
+  const handleSelectCompany = (newCompany, newDatasetRows = null) => {
+    const activeRows = newDatasetRows || (newCompany.isFromUploadedDataset ? (newCompany.pipelineData?.inspection?.sample_records || datasetRows) : datasetRows);
+    
+    // Trigger staged loading animation modal before committing state
+    setPendingContextSwitch({
+      newCompany,
+      activeRows,
+      sourceType: newCompany.isFromUploadedDataset ? 'dataset' : newCompany.isCustom ? 'custom' : 'preset',
+      recordCount: activeRows?.length || (newCompany.isFromUploadedDataset ? 10 : null),
+    });
+    setIsSwitchingAnimationOpen(true);
   };
 
-  const handleExploreDemo = () => {
-    const demoCompany = DEFAULT_DEMO_COMPANY;
-    setCompanyData(demoCompany);
-    setSelectedObjectives(['leads', 'conversion', 'search', 'ai_visibility']);
-    setPrimaryObjective('leads');
-    const updatedConfig = {
-      primaryFocus: 'Leads',
-      targetAudience: 'Enterprise',
-      depth: 'Balanced',
-      format: 'Executive',
-      persona: activePersona || 'Founder',
-      includes: ['website', 'seo', 'content', 'ai_discoverability', 'competitor_analysis', 'campaign_ideas'],
-      additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
-    };
-    setStrategyConfig(updatedConfig);
+  // Called when the staged loading animation finishes
+  const handleSwitchAnimationComplete = () => {
+    if (!pendingContextSwitch) {
+      setIsSwitchingAnimationOpen(false);
+      return;
+    }
 
+    const { newCompany, activeRows, sourceType } = pendingContextSwitch;
+    setCompanyData(newCompany);
+
+    const targetObjective = newCompany.defaultObjective || primaryObjective;
+    if (newCompany.defaultObjective) {
+      setPrimaryObjective(newCompany.defaultObjective);
+      setStrategyConfig((prev) => ({ ...prev, primaryFocus: newCompany.defaultObjective }));
+    }
+
+    // Synchronize both deterministic BI service and AI reasoning layer
+    defaultBIService.setCompany(newCompany, activeRows);
+    defaultAIService.setCompany(newCompany);
+
+    // Re-generate tailored strategy grounded in the new company and active rows
     const generated = generatePersonalizedStrategy({
-      company: demoCompany,
-      objectives: ['leads', 'conversion', 'search', 'ai_visibility'],
-      primaryObjective: 'leads',
-      config: updatedConfig,
+      company: newCompany,
+      objectives: selectedObjectives,
+      primaryObjective: targetObjective,
+      config: {
+        ...strategyConfig,
+        primaryFocus: targetObjective,
+      },
+      datasetRows: activeRows,
     });
 
     setStrategyData(generated);
-    setPlanTasks(generated.initialPlanTasks);
-    setIsGenerated(true);
-    setCurrentStage('executive-overview');
+    setPlanTasks(generated.initialPlanTasks || []);
+    setIsSwitchingAnimationOpen(false);
+    setPendingContextSwitch(null);
+
+    // Display high-visibility confirmation banner
+    setContextNotification({
+      type: 'success',
+      companyName: newCompany.name,
+      message: newCompany.isFromUploadedDataset
+        ? `Dataset successfully processed by backend pipeline (${activeRows?.length || 10} records parsed). AI Strategy calibrated to real telemetry.`
+        : `AI Strategic Reasoning Layer and Deterministic BI calibrated for ${newCompany.name}.`,
+    });
+
+    setTimeout(() => {
+      setContextNotification(null);
+    }, 6000);
   };
 
-  // 2. Actions from Company Setup
-  const handleCompanyNext = () => {
-    setCurrentStage('growth-objective');
-  };
+  // Pre-load default strategy so all views are immediately interactive
+  const [strategyData, setStrategyData] = useState(() =>
+    generatePersonalizedStrategy({
+      company: DEFAULT_DEMO_COMPANY,
+      objectives: ['leads', 'conversion', 'search', 'ai_visibility'],
+      primaryObjective: 'leads',
+      config: {
+        primaryFocus: 'Leads',
+        targetAudience: 'Enterprise',
+        depth: 'Balanced',
+        format: 'Executive',
+        persona: 'Founder',
+        includes: ['website', 'seo', 'content', 'ai_discoverability', 'competitor_analysis', 'campaign_ideas'],
+        additionalNotes: 'Focus heavily on enterprise customers. Prioritize website improvements before content.',
+      },
+    })
+  );
 
-  // 3. Actions from Objectives
-  const handleToggleObjective = (id) => {
-    setSelectedObjectives((prev) => {
-      const exists = prev.includes(id);
-      const updated = exists ? prev.filter((o) => o !== id) : [...prev, id];
-      if (exists && primaryObjective === id && updated.length > 0) {
-        setPrimaryObjective(updated[0]);
-      }
-      return updated;
+  // 90-Day Action Plan persistent tasks
+  const [planTasks, setPlanTasks] = useState(() => strategyData?.initialPlanTasks || []);
+
+  // Bridge notification / additions from Intelligence to Strategy
+  const handleAddInsightToStrategy = (insight) => {
+    // Dynamically enrich strategy data with transferred insight
+    setStrategyData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        keyFindings: [
+          {
+            title: insight.title || 'Transferred BI Insight',
+            finding: insight.explanation || insight.text || 'Grounded from BI Semantic Canvas',
+            metric: insight.evidence || insight.metric || 'Verified',
+            impact: 'P1 Strategic Priority',
+            strategicAction: insight.recommendedAction || 'Incorporate in 90-day execution roadmap.',
+          },
+          ...(prev.keyFindings || []),
+        ],
+      };
     });
   };
 
-  const handleObjectivesNext = () => {
-    setCurrentStage('strategy-config');
+  // Dynamic Persona Switcher without mutating source data (Requirement 12)
+  const handleChangePersona = (newPersonaId) => {
+    setActivePersona(newPersonaId);
+    setStrategyConfig((prev) => ({ ...prev, persona: newPersonaId }));
+
+    if (strategyData) {
+      const reRanked = rankRecommendations({
+        opportunities: strategyData.opportunities,
+        primaryObjective: strategyData.primaryObjective,
+        targetAudience: strategyData.config?.targetAudience || 'Enterprise',
+        persona: newPersonaId,
+        businessHealth: strategyData.businessHealth,
+        preferences: strategyData.config?.parsedPreferences || {},
+      });
+
+      setStrategyData((prev) => ({
+        ...prev,
+        activePersona: newPersonaId,
+        opportunities: reRanked,
+      }));
+    }
   };
 
-  // 4. Actions from Strategy Config
-  const handleBuildStrategy = () => {
-    setCurrentStage('generation');
-  };
-
-  // 5. Completion of Staged Generation
+  // Staged Generation Complete
   const handleGenerationComplete = () => {
     const generated = generatePersonalizedStrategy({
       company: companyData.name ? companyData : DEFAULT_DEMO_COMPANY,
@@ -144,38 +225,21 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
     setActivePersona(strategyConfig.persona || 'Founder');
     setStrategyData(generated);
     setPlanTasks(generated.initialPlanTasks);
-    setIsGenerated(true);
-    setCurrentStage('executive-overview');
+    setCurrentStage('strategy');
   };
 
-  // 6. Dynamic Persona Switcher without mutating source data (Requirement 2)
-  const handleChangePersona = (newPersonaId) => {
-    setActivePersona(newPersonaId);
-    setStrategyConfig((prev) => ({ ...prev, persona: newPersonaId }));
-
-    if (strategyData) {
-      // Re-rank opportunities and update lens without changing underlying metrics
-      const reRanked = rankRecommendations({
-        opportunities: strategyData.opportunities,
-        primaryObjective: strategyData.primaryObjective,
-        targetAudience: strategyData.config.targetAudience,
-        persona: newPersonaId,
-        businessHealth: strategyData.businessHealth,
-        preferences: strategyData.config.parsedPreferences || {},
-      });
-
-      setStrategyData((prev) => ({
-        ...prev,
-        activePersona: newPersonaId,
-        opportunities: reRanked,
-      }));
+  // Adaptive Interview Complete
+  const handleInterviewComplete = ({ answers, knowledgeGaps, companyContext }) => {
+    if (companyContext) {
+      setCompanyData((prev) => ({ ...prev, ...companyContext }));
     }
+    setCurrentStage('generation');
   };
 
-  // 7. Action Plan Task Management
+  // Action Plan Task Management
   const handleAddTaskToPlan = (newTask) => {
     setPlanTasks((prev) => {
-      if (prev.some((t) => t.id === newTask.id)) return prev;
+      if (prev.some((t) => t.id === newTask.id || t.task === newTask.task)) return prev;
       return [newTask, ...prev];
     });
   };
@@ -186,23 +250,6 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
     );
   };
 
-  // Reset entire studio flow
-  const handleResetStrategy = () => {
-    setCurrentStage('welcome');
-    setCompanyData({
-      name: '',
-      industry: '',
-      description: '',
-      products: '',
-      targetAudience: '',
-      targetGeography: '',
-      websiteUrl: '',
-    });
-    setStrategyData(null);
-    setIsGenerated(false);
-    setPlanTasks([]);
-  };
-
   return (
     <div className="min-h-screen bg-[#f8f9ff] text-slate-900 flex flex-col font-sans">
       {/* Global Studio Navigation Header */}
@@ -211,88 +258,86 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
         onSelectStage={(stageId) => setCurrentStage(stageId)}
         companyName={companyData.name || strategyData?.company?.name}
         primaryObjective={strategyData?.primaryObjective || primaryObjective}
-        isGenerated={isGenerated}
+        isGenerated={Boolean(strategyData)}
         activePersona={activePersona}
-        onResetStrategy={handleResetStrategy}
-        onLoadDemo={handleExploreDemo}
         isClassicMode={isClassicMode}
         onToggleClassicMode={onToggleClassicMode}
         onOpenAsk={() => setIsAskModalOpen(true)}
         onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
+        onOpenChallenge={() => setIsChallengeModalOpen(true)}
+        onStartDemoTour={() => setIsDemoTourOpen(true)}
+        onOpenCompanySelector={() => setIsCompanySelectorOpen(true)}
       />
+
+      {/* Context Switch Notification Banner */}
+      {contextNotification && (
+        <div className="bg-emerald-600 text-white px-4 py-2.5 shadow-md flex items-center justify-between animate-fadeIn z-30">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">check_circle</span>
+              <span>{contextNotification.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setContextNotification(null)}
+              className="text-white/80 hover:text-white text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main View Area */}
       <main className="flex-1 w-full pb-16">
-        {/* Screen 1: Welcome */}
-        {currentStage === 'welcome' && (
-          <WelcomeScreen
-            onStartStrategy={handleStartStrategy}
-            onExploreDemo={handleExploreDemo}
-          />
-        )}
-
-        {/* Screen 2: Company Setup */}
-        {currentStage === 'company-setup' && (
-          <CompanySetupScreen
-            companyData={companyData}
-            onUpdateCompany={setCompanyData}
-            onNext={handleCompanyNext}
-            onBack={() => setCurrentStage('welcome')}
-          />
-        )}
-
-        {/* Screen 3: Growth Objective */}
-        {currentStage === 'growth-objective' && (
-          <GrowthObjectiveScreen
-            selectedObjectives={selectedObjectives}
-            primaryObjective={primaryObjective}
-            onToggleObjective={handleToggleObjective}
-            onSetPrimaryObjective={setPrimaryObjective}
-            onNext={handleObjectivesNext}
-            onBack={() => setCurrentStage('company-setup')}
-          />
-        )}
-
-        {/* Screen 4: Strategy Configuration */}
-        {currentStage === 'strategy-config' && (
-          <StrategyConfigScreen
-            company={companyData.name ? companyData : DEFAULT_DEMO_COMPANY}
-            objectives={selectedObjectives}
-            primaryObjective={primaryObjective}
-            config={strategyConfig}
-            onUpdateConfig={setStrategyConfig}
-            onBuildStrategy={handleBuildStrategy}
-            onBack={() => setCurrentStage('growth-objective')}
-          />
-        )}
-
-        {/* Screen 5: Generation Experience */}
-        {currentStage === 'generation' && (
-          <GenerationScreen
-            onComplete={handleGenerationComplete}
+        {/* VIEW 1: Home (Strategic Briefing - Section 23) */}
+        {currentStage === 'home' && (
+          <StrategicBriefingScreen
             companyName={companyData.name || 'Acme Intelligence'}
+            primaryObjective={primaryObjective}
+            companyData={companyData}
+            onOpenCompanySelector={() => setIsCompanySelectorOpen(true)}
+            uploadedDataset={uploadedFile ? { name: uploadedFile.name, rows: datasetRows } : null}
+            strategyData={strategyData}
+            onOpenStrategy={() => setCurrentStage('strategy')}
+            onOpenIntelligence={() => setCurrentStage('intelligence')}
+            onOpenKnowledge={() => setCurrentStage('knowledge')}
+            onOpenOpportunities={() => setCurrentStage('opportunities')}
+            onOpenPlan={() => setCurrentStage('plan')}
+            onOpenAskAI={() => setIsAskModalOpen(true)}
+            onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
+            onOpenChallenge={() => setIsChallengeModalOpen(true)}
+            onStartInterview={() => setCurrentStage('interview')}
           />
         )}
 
-        {/* Screen 6: Executive Overview */}
-        {currentStage === 'executive-overview' && strategyData && (
-          <ExecutiveOverviewScreen
+        {/* VIEW 2: Strategy Canvas ("What should we do?" - Section 1, 2, 6, 15) */}
+        {currentStage === 'strategy' && (
+          <ExecutiveStrategyScreen
             strategyData={strategyData}
-            onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
-            onAddFindingToPlan={handleAddTaskToPlan}
             activePersona={activePersona}
             onChangePersona={handleChangePersona}
-            dashboardMode={dashboardMode}
-            onChangeMode={setDashboardMode}
-            dashboardDensity={dashboardDensity}
-            onChangeDensity={setDashboardDensity}
-            visualEmphasis={visualEmphasis}
-            onChangeEmphasis={setVisualEmphasis}
+            onNavigateToIntelligence={() => setCurrentStage('intelligence')}
+            onNavigateToPlan={() => setCurrentStage('plan')}
+            onNavigateToOpportunities={() => setCurrentStage('opportunities')}
+            onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
+            onOpenChallenge={() => setIsChallengeModalOpen(true)}
+            onAddTaskToPlan={handleAddTaskToPlan}
           />
         )}
 
-        {/* Screen 7: Audience Intelligence */}
-        {currentStage === 'audience-intelligence' && strategyData && (
+        {/* VIEW 3: Intelligence Canvas ("What is happening and why?" - Section 1, 7, 8, 9, 17, 18) */}
+        {currentStage === 'intelligence' && (
+          <IntelligenceScreen
+            key={companyData.id}
+            onNavigateToStrategy={() => setCurrentStage('strategy')}
+            onAddInsightToStrategy={handleAddInsightToStrategy}
+            onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
+          />
+        )}
+
+        {/* VIEW 4: Audience Intelligence Screen */}
+        {currentStage === 'audience' && strategyData && (
           <AudienceIntelligenceScreen
             strategyData={strategyData}
             onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
@@ -300,8 +345,8 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
           />
         )}
 
-        {/* Screen 8: Content Intelligence */}
-        {currentStage === 'content-intelligence' && strategyData && (
+        {/* VIEW 5: Content Intelligence Screen */}
+        {currentStage === 'content' && strategyData && (
           <ContentIntelligenceScreen
             strategyData={strategyData}
             onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
@@ -309,8 +354,8 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
           />
         )}
 
-        {/* Screen 9: Opportunity Center */}
-        {currentStage === 'opportunity-center' && strategyData && (
+        {/* VIEW 6: Opportunity Center Screen (Section 16) */}
+        {currentStage === 'opportunities' && strategyData && (
           <OpportunityCenterScreen
             strategyData={strategyData}
             onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
@@ -319,19 +364,57 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
           />
         )}
 
-        {/* Screen 10: 90-Day Action Plan */}
-        {currentStage === 'action-plan' && (
+        {/* VIEW 7: 90-Day Action Plan Screen (Section 15, 16) */}
+        {currentStage === 'plan' && (
           <ActionPlanScreen
             planTasks={planTasks}
             onUpdateTaskStatus={handleUpdateTaskStatus}
             onAddTask={handleAddTaskToPlan}
             onNavigateStage={(targetStage) => setCurrentStage(targetStage)}
-            company={companyData.name ? companyData : (strategyData?.company || DEFAULT_DEMO_COMPANY)}
+            company={companyData.name ? companyData : DEFAULT_DEMO_COMPANY}
+          />
+        )}
+
+        {/* VIEW 8: Company Knowledge & Memory (Section 5, 19) */}
+        {currentStage === 'knowledge' && (
+          <CompanyKnowledgeScreen
+            onLaunchTargetedQuestion={() => setCurrentStage('interview')}
+            onStartInterview={() => setCurrentStage('interview')}
+          />
+        )}
+
+        {/* SUB-FLOW: Adaptive AI Strategy Interview (Section 3, 4) */}
+        {currentStage === 'interview' && (
+          <AdaptiveInterviewScreen
+            companyData={companyData}
+            onCompleteInterview={handleInterviewComplete}
+            onCancel={() => setCurrentStage('home')}
+          />
+        )}
+
+        {/* SUB-FLOW: Strategy Configuration */}
+        {currentStage === 'strategy-config' && (
+          <StrategyConfigScreen
+            company={companyData.name ? companyData : DEFAULT_DEMO_COMPANY}
+            objectives={selectedObjectives}
+            primaryObjective={primaryObjective}
+            config={strategyConfig}
+            onUpdateConfig={setStrategyConfig}
+            onBuildStrategy={() => setCurrentStage('generation')}
+            onBack={() => setCurrentStage('home')}
+          />
+        )}
+
+        {/* SUB-FLOW: Staged Generation Experience (Section 14) */}
+        {currentStage === 'generation' && (
+          <GenerationScreen
+            onComplete={handleGenerationComplete}
+            companyName={companyData.name || 'Acme Intelligence'}
           />
         )}
       </main>
 
-      {/* Global Interactive Modals */}
+      {/* Global Modals & Interactive Tools */}
       <AskStrategyModal
         isOpen={isAskModalOpen}
         onClose={() => setIsAskModalOpen(false)}
@@ -343,6 +426,39 @@ export default function GrowthStudioApp({ isClassicMode, onToggleClassicMode }) 
       <WhatIfScenarioModal
         isOpen={isWhatIfModalOpen}
         onClose={() => setIsWhatIfModalOpen(false)}
+      />
+
+      <ChallengeStrategyModal
+        isOpen={isChallengeModalOpen}
+        onClose={() => setIsChallengeModalOpen(false)}
+        strategyData={strategyData}
+      />
+
+      <DemoStoryTourModal
+        isOpen={isDemoTourOpen}
+        onClose={() => setIsDemoTourOpen(false)}
+        onNavigateStage={(stage) => setCurrentStage(stage)}
+        onOpenWhatIf={() => setIsWhatIfModalOpen(true)}
+        onOpenChallenge={() => setIsChallengeModalOpen(true)}
+        onOpenAskAI={() => setIsAskModalOpen(true)}
+      />
+
+      <CompanySelectorModal
+        isOpen={isCompanySelectorOpen}
+        onClose={() => setIsCompanySelectorOpen(false)}
+        activeCompany={companyData}
+        onSelectCompany={handleSelectCompany}
+        uploadedDataset={uploadedFile ? { name: uploadedFile.name, rows: datasetRows } : null}
+      />
+
+      {/* Staged Context Switching & Backend Telemetry Synthesis Animation Modal */}
+      <ContextSwitchingAnimationModal
+        isOpen={isSwitchingAnimationOpen}
+        companyName={pendingContextSwitch?.newCompany?.name || 'Company'}
+        industry={pendingContextSwitch?.newCompany?.industry || 'Industry'}
+        sourceType={pendingContextSwitch?.sourceType || 'preset'}
+        recordCount={pendingContextSwitch?.recordCount}
+        onComplete={handleSwitchAnimationComplete}
       />
     </div>
   );

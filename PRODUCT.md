@@ -72,3 +72,13 @@ Unlike generic BI tools or unstructured AI assistants:
 - WCAG 2.1 AA compliant color contrast across all analytical charts, data grids, and status indicators.
 - Colorblind-safe palettes for multi-channel attribution and anomaly flags.
 - Keyboard-accessible interactive filters and clear semantic structure.
+
+## AI Growth Strategy Studio + AI BI Orchestration (Phase 2 Transformation)
+
+The product integrates an internal AI Strategic Reasoning Layer directly on top of the deterministic Business Intelligence engine:
+- **Primary Loop:** Understand → Ask → Research → Analyze → Verify → Explain → Recommend → Prioritize → Act → Measure → Learn.
+- **Two Connected Modes:**
+  1. **STRATEGY Mode ("What should we do?"):** Company understanding, business goals, hypotheses requiring BI verification, evidence-grounded recommendations (`Recommendation → Why → Evidence → Confidence → Action`), persona perspectives (Founder, CMO, Growth Strategist, Analyst), 90-day action plans, and adversarial review (`Challenge Strategy`).
+  2. **INTELLIGENCE Mode ("What is happening and why?"):** Deterministic semantic BI calculations (`BIService`), 6-dimension root-cause investigations (`Dig Deeper`), cohort comparisons, anomaly detection, and the direct `Add Insight to Strategy` bridge.
+- **Persistent Company Memory:** Tracks company facts, goals, audience assumptions, recorded decisions, observed metric outcomes, and learned recommendations over time.
+

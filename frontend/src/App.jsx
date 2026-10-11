@@ -273,6 +273,9 @@ export default function App() {
       <GrowthStudioApp
         isClassicMode={isClassicMode}
         onToggleClassicMode={() => setIsClassicMode(!isClassicMode)}
+        uploadedFile={uploadedFile}
+        pipelineData={pipelineData}
+        datasetRows={datasetRows}
       />
     );
   }
