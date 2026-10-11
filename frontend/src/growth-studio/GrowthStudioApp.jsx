@@ -11,6 +11,7 @@ import OpportunityCenterScreen from './components/OpportunityCenterScreen';
 import ActionPlanScreen from './components/ActionPlanScreen';
 import StrategyConfigScreen from './components/StrategyConfigScreen';
 import GenerationScreen from './components/GenerationScreen';
+import CompetitiveAuditStudio from './components/CompetitiveAuditStudio';
 
 // Modals
 import AskStrategyModal from './components/AskStrategyModal';
@@ -47,8 +48,8 @@ export default function GrowthStudioApp({
   pipelineData = null,
   datasetRows = [],
 }) {
-  // Navigation active screen: default to 'home' (Strategic Briefing)
-  const [currentStage, setCurrentStage] = useState('home');
+  // Navigation active screen: default to 'audit' (Competitive Intelligence & Revenue Audit Engine)
+  const [currentStage, setCurrentStage] = useState('audit');
 
   // Company Profile state
   const [companyData, setCompanyData] = useState(DEFAULT_DEMO_COMPANY);
@@ -82,6 +83,7 @@ export default function GrowthStudioApp({
   const [isSwitchingAnimationOpen, setIsSwitchingAnimationOpen] = useState(false);
   const [pendingContextSwitch, setPendingContextSwitch] = useState(null);
   const [contextNotification, setContextNotification] = useState(null);
+  const [auditData, setAuditData] = useState(null);
 
   // Handle Dynamic Company Switching or Custom Dataset Ingestion
   const handleSelectCompany = (newCompany, newDatasetRows = null) => {
@@ -251,7 +253,7 @@ export default function GrowthStudioApp({
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9ff] text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#0A0F1E] text-[#E6EAF2] flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Global Studio Navigation Header */}
       <StudioNavigation
         currentStage={currentStage}
@@ -267,6 +269,7 @@ export default function GrowthStudioApp({
         onOpenChallenge={() => setIsChallengeModalOpen(true)}
         onStartDemoTour={() => setIsDemoTourOpen(true)}
         onOpenCompanySelector={() => setIsCompanySelectorOpen(true)}
+        growthBetsCount={auditData?.growth_bets?.length || 3}
       />
 
       {/* Context Switch Notification Banner */}
@@ -289,9 +292,27 @@ export default function GrowthStudioApp({
       )}
 
       {/* Main View Area */}
-      <main className="flex-1 w-full pb-16">
-        {/* VIEW 1: Home (Strategic Briefing - Section 23) */}
-        {currentStage === 'home' && (
+      <main className="flex-1 w-full pb-36 sm:pb-44">
+        {/* PRIMARY ENGINE: Competitor Audit Engine */}
+        {(['audit', 'home', 'matrix', 'leaks', 'bets'].includes(currentStage)) && (
+          <CompetitiveAuditStudio
+            onSwitchToBI={onToggleClassicMode}
+            activeTab={
+              currentStage === 'matrix'
+                ? 'matrix'
+                : currentStage === 'leaks'
+                ? 'leaks'
+                : currentStage === 'bets'
+                ? 'bets'
+                : 'all'
+            }
+            onSelectTab={(tabId) => setCurrentStage(tabId)}
+            onAuditCompleted={(res) => setAuditData(res)}
+          />
+        )}
+
+        {/* SUB-VIEW: Strategic Briefing Screen */}
+        {currentStage === 'briefing' && (
           <StrategicBriefingScreen
             companyName={companyData.name || 'Acme Intelligence'}
             primaryObjective={primaryObjective}

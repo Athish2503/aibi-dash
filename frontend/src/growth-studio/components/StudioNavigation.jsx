@@ -1,189 +1,141 @@
 import React from 'react';
 
 /**
- * StudioNavigation - Navigation header for AI Growth Strategy Studio & AI BI
+ * StudioNavigation - Ultra-refined executive navigation for Growth Studio & BI Studio
  * 
- * Mandate (Section 22):
- * Primary Views:
- * - Home (Strategic Briefing)
- * - Strategy ("What should we do?")
- * - Intelligence ("What is happening and why?")
- * - Audience
- * - Content
- * - Opportunities
- * - Plan (90-Day Action Plan)
- * - Company Knowledge (Understanding & Memory)
- * 
- * Global Actions:
- * - Ask AI
- * - What-If Scenario Analysis
- * - Challenge Strategy
- * - Connected Mode Indicators
+ * World-class SaaS layout (Linear / Stripe / Vercel caliber):
+ * - Seamless glassmorphic header with specular border highlight
+ * - Workspace selector with Enterprise badge
+ * - Segmented Cupertino-style mode switch [ Growth Studio | BI Studio ]
+ * - High-contrast semantic deliverable tabs with micro-indicators
  */
 export default function StudioNavigation({
   currentStage,
   onSelectStage,
   companyName = 'Acme Intelligence',
-  primaryObjective = 'leads',
-  isGenerated = true,
-  activePersona = 'Founder',
   isClassicMode,
   onToggleClassicMode,
   onOpenAsk,
-  onOpenWhatIf,
-  onOpenChallenge,
   onStartDemoTour,
   onOpenCompanySelector,
+  growthBetsCount = 3,
 }) {
-  const mainNavItems = [
-    { id: 'home', label: 'Home', icon: 'home', badge: null },
-    { id: 'strategy', label: 'Strategy', icon: 'psychology', badge: 'What to do' },
-    { id: 'intelligence', label: 'Intelligence', icon: 'analytics', badge: 'What & why' },
-    { id: 'audience', label: 'Audience', icon: 'groups', badge: null },
-    { id: 'content', label: 'Content', icon: 'article', badge: null },
-    { id: 'opportunities', label: 'Opportunities', icon: 'rocket_launch', badge: 'P1' },
-    { id: 'plan', label: '90-Day Plan', icon: 'calendar_month', badge: null },
-    { id: 'knowledge', label: 'Company Knowledge', icon: 'model_training', badge: 'Memory' },
+  const navTabs = [
+    { id: 'audit', label: 'Audit', icon: 'radar' },
+    { id: 'matrix', label: 'Gap Matrix', icon: 'view_column' },
+    { id: 'leaks', label: 'Revenue Leaks', icon: 'leak_remove' },
+    { id: 'bets', label: 'Growth Bets', icon: 'rocket_launch', count: growthBetsCount },
+    { id: 'plan', label: '90-Day Plan', icon: 'calendar_month' },
+    { id: 'knowledge', label: 'Saved Context', icon: 'history_edu' },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs">
-      {/* Top Bar */}
+    <header className="sticky top-0 z-40 bg-[#090D18]/90 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+      {/* Tier 1: Main Workspace Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-        {/* Brand & Context */}
+        {/* Workspace Identity & Switcher */}
         <div className="flex items-center gap-3">
-          <div
-            onClick={() => onSelectStage('home')}
-            className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-2xs cursor-pointer"
+          <button
+            type="button"
+            onClick={onOpenCompanySelector}
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-all group cursor-pointer text-left"
+            title="Switch workspace / client context"
+            aria-label="Switch workspace"
           >
-            <span className="material-symbols-outlined text-lg">trending_up</span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                onClick={() => onSelectStage('home')}
-                className="font-extrabold text-sm tracking-tight text-slate-900 cursor-pointer"
-              >
-                AI Growth Strategy Studio
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 shrink-0 group-hover:scale-105 transition-transform">
+              <span className="material-symbols-outlined text-lg">query_stats</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-sm text-white group-hover:text-indigo-200 transition-colors tracking-tight">
+                {companyName || 'Acme Intelligence'}
               </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase">
-                AI + BI
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300 border border-white/[0.08] tracking-wider uppercase">
+                Enterprise
+              </span>
+              <span className="material-symbols-outlined text-base text-slate-400 group-hover:text-white transition-colors">
+                expand_more
               </span>
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[11px] font-semibold text-slate-700 truncate max-w-[140px] sm:max-w-xs leading-none">
-                {companyName}
-              </span>
-              <button
-                type="button"
-                onClick={onOpenCompanySelector}
-                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 cursor-pointer inline-flex items-center gap-0.5"
-                title="Switch company archetype or input your own company"
-              >
-                <span>Switch</span>
-                <span className="material-symbols-outlined text-[10px]">arrow_drop_down</span>
-              </button>
-            </div>
-          </div>
+          </button>
         </div>
 
-        {/* Global Action Tools (Ask AI, What-If, Challenge Strategy, Demo Tour) */}
-        <div className="flex items-center gap-2">
-          {/* Demo Tour Button for seamless verification of Section 29 */}
-          {onStartDemoTour && (
-            <button
-              type="button"
-              onClick={onStartDemoTour}
-              className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300 transition-colors cursor-pointer"
-              title="Launch 19-Step Demo Walkthrough"
-            >
-              <span className="material-symbols-outlined text-xs text-emerald-600">play_circle</span>
-              <span>Demo Tour</span>
-            </button>
-          )}
+        {/* Center: Segmented Cupertino Mode Control */}
+        <div className="flex items-center bg-[#050811] p-1 rounded-xl border border-white/[0.08] shadow-inner">
+          <button
+            type="button"
+            onClick={() => isClassicMode && onToggleClassicMode?.()}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              !isClassicMode
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+            <span>Growth Studio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => !isClassicMode && onToggleClassicMode?.()}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              isClassicMode
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xs text-slate-400">dashboard</span>
+            <span>BI Studio</span>
+          </button>
+        </div>
 
-          {/* Ask AI Global Tool */}
+        {/* Right: Ask AI & Avatar */}
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={onOpenAsk}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition-colors cursor-pointer"
-            title="Open Contextual AI Assistant"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 hover:text-white text-xs font-semibold border border-white/[0.08] hover:border-indigo-500/40 transition-all cursor-pointer shadow-xs"
+            title="Ask AI Copilot"
           >
-            <span className="material-symbols-outlined text-xs">psychology</span>
-            <span className="hidden sm:inline">Ask AI</span>
+            <span className="material-symbols-outlined text-sm text-indigo-400">psychology</span>
+            <span>Ask AI</span>
+            <kbd className="hidden sm:inline-block ml-1 px-1.5 py-0.2 rounded bg-black/40 text-[10px] text-slate-400 font-mono border border-white/[0.08]">
+              ⌘K
+            </kbd>
           </button>
-
-          {/* What-If Scenario Analysis */}
           <button
             type="button"
-            onClick={onOpenWhatIf}
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
-            title="Launch What-If Scenario Simulations"
+            onClick={onStartDemoTour}
+            className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] hover:border-white/[0.2] flex items-center justify-center text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
+            title="Account & Walkthrough"
+            aria-label="User account and tour"
           >
-            <span className="material-symbols-outlined text-xs">tune</span>
-            <span>What-If</span>
-          </button>
-
-          {/* Challenge Strategy */}
-          <button
-            type="button"
-            onClick={onOpenChallenge}
-            className="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold border border-amber-300 transition-colors cursor-pointer"
-            title="Adversarial Strategic Stress-Testing"
-          >
-            <span className="material-symbols-outlined text-xs text-amber-600">gavel</span>
-            <span>Challenge</span>
-          </button>
-
-          {/* Classic Mode Switch */}
-          <button
-            type="button"
-            onClick={onToggleClassicMode}
-            className="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-xs font-medium border border-slate-200 transition-colors cursor-pointer"
-            title="Switch to Classic Power BI Canvas"
-          >
-            Classic BI
+            <span className="material-symbols-outlined text-lg">account_circle</span>
           </button>
         </div>
       </div>
 
-      {/* Navigation Tabs Bar (Section 22) */}
-      <div className="border-t border-slate-200/80 bg-slate-50/80 overflow-x-auto scrollbar-none">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center space-x-1 sm:space-x-2 py-1">
-          {mainNavItems.map((item) => {
+      {/* Tier 2: Streamlined Semantic Deliverables Tabs */}
+      <div className="border-t border-white/[0.06] bg-[#070A14]/70 overflow-x-auto scrollbar-none">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center space-x-1 py-1.5">
+          {navTabs.map((item) => {
             const isActive = currentStage === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => onSelectStage(item.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-white text-blue-700 shadow-2xs border border-slate-200/90'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    ? 'bg-white/[0.1] text-white border border-white/[0.14] shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
                 }`}
               >
-                <span
-                  className={`material-symbols-outlined text-sm ${
-                    isActive ? 'text-blue-600' : 'text-slate-400'
-                  }`}
-                >
+                <span className={`material-symbols-outlined text-sm ${isActive ? 'text-indigo-400' : 'text-slate-500'}`}>
                   {item.icon}
                 </span>
                 <span>{item.label}</span>
-                {item.badge && (
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full leading-none ${
-                      item.id === 'strategy'
-                        ? 'bg-indigo-100 text-indigo-800'
-                        : item.id === 'intelligence'
-                        ? 'bg-blue-100 text-blue-800'
-                        : item.id === 'opportunities'
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-emerald-100 text-emerald-800'
-                    }`}
-                  >
-                    {item.badge}
+                {item.count != null && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {item.count}
                   </span>
                 )}
               </button>

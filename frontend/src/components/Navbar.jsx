@@ -63,16 +63,31 @@ export default function Navbar({
           <span className="font-bold text-base text-on-surface tracking-tight hidden sm:inline">
             PowerGen BI
           </span>
-          {onToggleGrowthStudio && (
+
+          {/* Top-Level Workspace Switcher Decoupled Controls */}
+          <div className="flex items-center bg-surface-container p-1 rounded-xl border border-outline-variant/40 ml-2 sm:ml-4 gap-1">
+            {onToggleGrowthStudio && (
+              <button
+                type="button"
+                onClick={onToggleGrowthStudio}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold text-secondary hover:text-on-surface hover:bg-surface-container-high transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Switch to Workflow A: Executive Growth Studio"
+              >
+                <span className="material-symbols-outlined text-sm text-indigo-600">query_stats</span>
+                <span className="hidden sm:inline">Workflow A: Executive Growth Studio</span>
+                <span className="sm:hidden">Growth Studio</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={onToggleGrowthStudio}
-              className="ml-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-primary text-white shadow-xs flex items-center gap-1.5 cursor-default"
+              title="Active: Workflow B: PowerGen BI Enterprise Studio"
             >
-              <span className="material-symbols-outlined text-sm">trending_up</span>
-              <span>Growth Studio</span>
+              <span className="material-symbols-outlined text-sm">dashboard</span>
+              <span className="hidden sm:inline">Workflow B: PowerGen BI Enterprise Studio</span>
+              <span className="sm:hidden">PowerGen BI</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 

@@ -310,3 +310,35 @@ export async function compareDatasetsById({ datasetIdA, datasetIdB, labelA = 'Ba
   return await res.json();
 }
 
+// --- Competitive Growth & Revenue Audit Services ---
+
+export async function runCompetitiveGrowthAudit(payload) {
+  const res = await fetch(`${API_BASE}/growth/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Competitive growth audit failed');
+  }
+
+  return await res.json();
+}
+
+export async function previewSiteIntel(url) {
+  const res = await fetch(`${API_BASE}/growth/scrape-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Failed to inspect site intelligence');
+  }
+
+  return await res.json();
+}
+
